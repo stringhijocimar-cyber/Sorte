@@ -4,32 +4,70 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Globe -->
+
+    <!-- Espadas cruzadas atrás do globo -->
+    <group android:name="swords">
+        <!-- lâmina 1 -->
+        <path
+            android:fillColor="#D6DEE8"
+            android:pathData="M27,80 L30,83 L79,34 L76,31 Z" />
+        <path
+            android:fillColor="#AEB9C7"
+            android:pathData="M76,31 L79,34 L84,25 Z" />
+        <!-- lâmina 2 -->
+        <path
+            android:fillColor="#D6DEE8"
+            android:pathData="M81,80 L78,83 L29,34 L32,31 Z" />
+        <path
+            android:fillColor="#AEB9C7"
+            android:pathData="M32,31 L29,34 L24,25 Z" />
+        <!-- guardas e punhos -->
+        <path
+            android:fillColor="#C8A02E"
+            android:pathData="M22,74 L34,86 L30,90 L18,78 Z" />
+        <path
+            android:fillColor="#C8A02E"
+            android:pathData="M86,74 L74,86 L78,90 L90,78 Z" />
+    </group>
+
+    <!-- Globo -->
     <path
-        android:fillColor="#1E88E5"
-        android:pathData="M54,30 m-22,0 a22,22 0 1,0 44,0 a22,22 0 1,0 -44,0" />
+        android:pathData="M54,50 m-30,0 a30,30 0 1,0 60,0 a30,30 0 1,0 -60,0"
+        android:fillColor="#15507F" />
     <path
-        android:fillColor="#43A047"
-        android:pathData="M40,20 l8,4 l-2,8 l-8,2 l-4,-8 z" />
+        android:pathData="M54,50 m-30,0 a30,30 0 1,0 60,0 a30,30 0 1,0 -60,0"
+        android:strokeColor="#0B2035"
+        android:strokeWidth="2.5" />
+
+    <!-- Continentes estilizados -->
     <path
-        android:fillColor="#43A047"
-        android:pathData="M60,26 l10,2 l2,10 l-8,6 l-8,-8 z" />
+        android:fillColor="#3FA35C"
+        android:pathData="M34,36 L45,32 L52,37 L48,45 L38,47 L31,42 Z" />
     <path
-        android:fillColor="#43A047"
-        android:pathData="M44,40 l10,-2 l6,8 l-6,6 l-10,-4 z" />
-    <!-- Crossed swords -->
+        android:fillColor="#3FA35C"
+        android:pathData="M44,52 L52,49 L57,55 L54,66 L46,68 L41,60 Z" />
     <path
-        android:strokeColor="#E0E4EA"
-        android:strokeWidth="4"
-        android:pathData="M38,84 L74,50" />
+        android:fillColor="#3FA35C"
+        android:pathData="M60,30 L74,33 L80,42 L72,50 L62,46 L58,38 Z" />
     <path
-        android:strokeColor="#E0E4EA"
-        android:strokeWidth="4"
-        android:pathData="M70,84 L34,50" />
+        android:fillColor="#3FA35C"
+        android:pathData="M62,54 L72,56 L76,64 L68,71 L61,66 Z" />
+
+    <!-- Meridianos -->
     <path
-        android:fillColor="#FFB300"
-        android:pathData="M74,50 l6,-6 l2,2 l-6,6 z" />
+        android:pathData="M54,20 A22,30 0 0,1 54,80 A22,30 0 0,1 54,20"
+        android:strokeColor="#7FC4F0"
+        android:strokeWidth="1.2"
+        android:strokeAlpha="0.55" />
     <path
-        android:fillColor="#FFB300"
-        android:pathData="M34,50 l-6,-6 l-2,2 l6,6 z" />
+        android:pathData="M24,50 L84,50"
+        android:strokeColor="#7FC4F0"
+        android:strokeWidth="1.2"
+        android:strokeAlpha="0.55" />
+
+    <!-- Brilho -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillAlpha="0.16"
+        android:pathData="M54,50 m-30,0 a30,30 0 0,1 30,-30 a30,30 0 0,0 -22,30 Z" />
 </vector>

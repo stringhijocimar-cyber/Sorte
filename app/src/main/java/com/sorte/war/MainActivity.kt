@@ -13,7 +13,10 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.sorte.war.ui.GameViewModel
 import com.sorte.war.ui.Screen
 import com.sorte.war.ui.screens.GameScreen
-import com.sorte.war.ui.screens.MenuScreen
+import com.sorte.war.ui.screens.HomeScreen
+import com.sorte.war.ui.screens.HowToPlayScreen
+import com.sorte.war.ui.screens.NewGameScreen
+import com.sorte.war.ui.screens.StatsScreen
 import com.sorte.war.ui.theme.NightNavy
 import com.sorte.war.ui.theme.WarTheme
 
@@ -34,7 +37,10 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun WarApp(vm: GameViewModel = viewModel()) {
     when (vm.screen) {
-        Screen.MENU -> MenuScreen(vm)
+        Screen.HOME -> HomeScreen(vm)
+        Screen.NEW_GAME -> NewGameScreen(vm)
+        Screen.STATS -> StatsScreen(vm)
+        Screen.HOW_TO_PLAY -> HowToPlayScreen(vm)
         Screen.GAME -> GameScreen(vm)
     }
 }

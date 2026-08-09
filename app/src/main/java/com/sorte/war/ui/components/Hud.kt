@@ -115,8 +115,13 @@ private fun HudIconButton(icon: androidx.compose.ui.graphics.vector.ImageVector,
     }
 }
 
+/**
+ * Placar ao vivo: para cada exército, o comandante, quantos países domina
+ * (de 42) e o total de tropas em campo.
+ */
 @Composable
 private fun PlayersStrip(engine: GameEngine) {
+    val total = com.sorte.war.model.MapData.territories.size
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -125,33 +130,51 @@ private fun PlayersStrip(engine: GameEngine) {
     ) {
         engine.players.forEach { p ->
             val active = p.id == engine.currentPlayerIndex && !p.eliminated
+            val countries = engine.ownedCount(p.id)
+            val armies = engine.territoriesOf(p.id).sumOf { engine.armiesOf[it] }
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
-                    .alpha(if (p.eliminated) 0.4f else 1f)
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(if (active) Color(0xFF294061) else Color(0xFF1A2A40))
+                    .alpha(if (p.eliminated) 0.45f else 1f)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(if (active) Color(0xFF29456B) else Color(0xFF17263A))
                     .border(
-                        1.dp,
-                        if (active) Gold else Color.Transparent,
-                        RoundedCornerShape(20.dp)
+                        if (active) 1.5.dp else 1.dp,
+                        if (active) Gold else Color(0x22FFFFFF),
+                        RoundedCornerShape(14.dp)
                     )
-                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                    .padding(horizontal = 7.dp, vertical = 5.dp)
             ) {
-                Box(
-                    Modifier
-                        .size(12.dp)
-                        .clip(CircleShape)
-                        .background(Color(p.colorArgb))
+                AvatarPortrait(
+                    avatar = com.sorte.war.model.Avatar.byId(p.avatarId),
+                    sizeDp = 26,
+                    ringColor = Color(p.colorArgb)
                 )
-                Spacer(Modifier.width(5.dp))
-                Text(
-                    "${engine.ownedCount(p.id)}",
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 12.sp,
-                    textDecoration = if (p.eliminated) TextDecoration.LineThrough else null
-                )
+                Spacer(Modifier.width(6.dp))
+                Column {
+                    Text(
+                        p.name,
+                        color = Color.White,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 10.sp,
+                        maxLines = 1,
+                        textDecoration = if (p.eliminated) TextDecoration.LineThrough else null
+                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            "$countries/$total",
+                            color = Color(p.colorArgb),
+                            fontWeight = FontWeight.Black,
+                            fontSize = 12.sp
+                        )
+                        Spacer(Modifier.width(5.dp))
+                        Text(
+                            "⚔ $armies",
+                            color = TextSecondary,
+                            fontSize = 10.sp
+                        )
+                    }
+                }
             }
         }
     }

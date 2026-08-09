@@ -88,14 +88,19 @@ object Ai {
         val p = me(engine)
         var guard = 0
         while (guard++ < 200 && engine.phase == Phase.ATAQUE) {
+            val minForce = engine.difficulty.minArmiesToAttack
+            val minAdvantage = engine.difficulty.attackThreshold
             var best: Pair<Int, Int>? = null
-            var bestAdvantage = 0
+            var bestAdvantage = Int.MIN_VALUE
             for (from in engine.territoriesOf(p)) {
                 if (engine.armiesOf[from] < 2) continue
                 for (to in engine.attackTargets(from)) {
                     val advantage = engine.armiesOf[from] - engine.armiesOf[to]
-                    // Ataca apenas com vantagem (e força mínima razoável).
-                    if (engine.armiesOf[from] >= 3 && advantage >= 1 && advantage > bestAdvantage) {
+                    // A agressividade depende do nível de dificuldade escolhido.
+                    if (engine.armiesOf[from] >= minForce &&
+                        advantage >= minAdvantage &&
+                        advantage > bestAdvantage
+                    ) {
                         bestAdvantage = advantage
                         best = from to to
                     }

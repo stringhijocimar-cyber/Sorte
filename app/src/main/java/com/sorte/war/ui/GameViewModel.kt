@@ -8,7 +8,10 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.sorte.war.data.GameStorage
+import com.sorte.war.data.PlayerStats
 import com.sorte.war.data.SaveInfo
+import com.sorte.war.data.StatsStorage
+import com.sorte.war.model.Difficulty
 import com.sorte.war.engine.Ai
 import com.sorte.war.engine.GameEngine
 import com.sorte.war.model.Avatar
@@ -19,7 +22,7 @@ import com.sorte.war.model.PlayerPalette
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-enum class Screen { MENU, GAME }
+enum class Screen { HOME, NEW_GAME, STATS, HOW_TO_PLAY, GAME }
 
 /** Relatório narrativo do comandante entregue ao início da rodada do jogador. */
 data class CommanderReport(
@@ -33,13 +36,24 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
 
     val sound: SoundManager by lazy { SoundManager(getApplication<Application>()) }
     private val storage = GameStorage(getApplication<Application>())
+    private val statsStore = StatsStorage(getApplication<Application>())
 
     /** Resumo da partida salva (null se não houver). */
     var saveInfo by mutableStateOf<SaveInfo?>(storage.info())
         private set
 
-    var screen by mutableStateOf(Screen.MENU)
+    /** Estatísticas acumuladas do jogador. */
+    var stats by mutableStateOf<PlayerStats>(statsStore.load())
         private set
+
+    fun refreshStats() { stats = statsStore.load() }
+
+    fun resetStats() { statsStore.reset(); refreshStats(); bump() }
+
+    var screen by mutableStateOf(Screen.HOME)
+        private set
+
+    fun goTo(s: Screen) { screen = s; sound.play(Sfx.CLICK); bump() }
     var engine: GameEngine? = null
         private set
     var refresh by mutableIntStateOf(0)
@@ -92,7 +106,8 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         humanName: String,
         totalPlayers: Int,
         humanColorIndex: Int,
-        humanAvatarId: Int = 0
+        humanAvatarId: Int = 0,
+        difficulty: Difficulty = Difficulty.VETERANO
     ) {
         val palette = PlayerPalette.ordered
         val humanColor = palette[humanColorIndex.coerceIn(0, palette.size - 1)]
@@ -114,7 +129,9 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
                 )
             }
         }
-        engine = GameEngine(configs)
+        engine = GameEngine(configs, difficulty)
+        statsStore.rememberProfile(humanName.ifBlank { "Comandante" }, humanAvatarId)
+        refreshStats()
         selectedTerritory = null
         battleDialog = null
         showAdvanceDialog = false
@@ -170,7 +187,8 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     fun backToMenu() {
         persist()          // guarda a partida em andamento antes de sair
         engine = null
-        screen = Screen.MENU
+        refreshStats()
+        screen = Screen.HOME
         bump()
     }
 
@@ -225,6 +243,13 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
             val result = e.attack(from, id)
             if (result != null) {
                 battleDialog = result
+                // estatísticas: rodada vencida quando o defensor perde mais tropas
+                statsStore.recordBattle(
+                    won = result.defenderLosses > result.attackerLosses,
+                    armiesLost = result.attackerLosses,
+                    conquered = result.conquered
+                )
+                refreshStats()
                 if (!e.canAttackFrom(from)) selectedTerritory = null
                 checkEndSound()
             }
@@ -293,6 +318,8 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         if (gained > 0) {
             sound.play(Sfx.CONQUER, 0.7f)
             statusMessage = "Você trocou cartas e recrutou $gained exércitos!"
+            statsStore.recordTrade()
+            refreshStats()
             persist()
         }
         bump()
@@ -392,7 +419,11 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         val w = e.winnerId ?: return
         if (endSoundPlayed) return
         endSoundPlayed = true
-        if (e.players[w].isHuman) sound.play(Sfx.VICTORY) else sound.play(Sfx.DEFEAT)
+        val humanWon = e.players[w].isHuman
+        if (humanWon) sound.play(Sfx.VICTORY) else sound.play(Sfx.DEFEAT)
+        // registra o resultado nas estatísticas (uma única vez por partida)
+        statsStore.recordGameEnd(humanWon, e.ownedCount(humanId))
+        refreshStats()
     }
 
     override fun onCleared() {

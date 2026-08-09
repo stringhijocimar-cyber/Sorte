@@ -39,45 +39,108 @@ private fun DrawScope.drawPortrait(avatar: Avatar, ringColor: Color?) {
     val skin = Color(avatar.skinArgb)
     val accent = Color(avatar.accentArgb)
 
-    // fundo circular
+    val radius = minOf(w, h) / 2f
+
+    // fundo: halo na cor do comandante, escurecendo nas bordas
     drawCircle(
-        Brush.verticalGradient(listOf(Color(0xFF1B2C44), Color(0xFF0B1220))),
-        radius = minOf(w, h) / 2f,
+        Brush.radialGradient(
+            listOf(accent.copy(alpha = 0.42f), Color(0xFF16243A), Color(0xFF070C14)),
+            center = Offset(cx, h * 0.34f),
+            radius = radius * 1.25f
+        ),
+        radius = radius,
         center = Offset(cx, h / 2f)
     )
 
-    // ombros
+    // ombros / manto com gola
     val shoulders = Path().apply {
-        moveTo(cx - 34f * u, h)
-        cubicTo(cx - 32f * u, 66f * u, cx - 16f * u, 60f * u, cx, 60f * u)
-        cubicTo(cx + 16f * u, 60f * u, cx + 32f * u, 66f * u, cx + 34f * u, h)
+        moveTo(cx - 36f * u, h)
+        cubicTo(cx - 34f * u, 68f * u, cx - 17f * u, 61f * u, cx, 61f * u)
+        cubicTo(cx + 17f * u, 61f * u, cx + 34f * u, 68f * u, cx + 36f * u, h)
         close()
     }
-    drawPath(shoulders, accent.copy(alpha = 0.92f))
-    drawPath(shoulders, Color(0x33000000), style = Stroke(width = 1.5f))
+    drawPath(shoulders, accent)
+    // sombra inferior do manto, dando volume
+    drawPath(
+        Path().apply {
+            moveTo(cx - 36f * u, h)
+            cubicTo(cx - 20f * u, 86f * u, cx + 20f * u, 86f * u, cx + 36f * u, h)
+            close()
+        },
+        Color(0x33000000)
+    )
+    // gola em V
+    drawPath(
+        Path().apply {
+            moveTo(cx - 12f * u, 63f * u)
+            lineTo(cx, 78f * u)
+            lineTo(cx + 12f * u, 63f * u)
+            lineTo(cx + 6f * u, 61f * u)
+            lineTo(cx, 70f * u)
+            lineTo(cx - 6f * u, 61f * u)
+            close()
+        },
+        Color(0x55000000)
+    )
 
-    // pescoço e rosto
+    // pescoço (com sombra do queixo)
+    drawRect(skin, topLeft = Offset(cx - 7f * u, 50f * u), size = Size(14f * u, 15f * u))
     drawRect(
-        skin.copy(alpha = 0.95f),
+        Color(0x33000000),
         topLeft = Offset(cx - 7f * u, 50f * u),
-        size = Size(14f * u, 14f * u)
+        size = Size(14f * u, 5f * u)
+    )
+
+    // rosto
+    drawOval(skin, topLeft = Offset(cx - 16f * u, 22f * u), size = Size(32f * u, 39f * u))
+    // luz no lado esquerdo, sombra no direito
+    drawOval(
+        Color(0x22FFFFFF),
+        topLeft = Offset(cx - 15f * u, 24f * u),
+        size = Size(15f * u, 30f * u)
     )
     drawOval(
-        skin,
-        topLeft = Offset(cx - 16f * u, 22f * u),
-        size = Size(32f * u, 38f * u)
+        Color(0x1E000000),
+        topLeft = Offset(cx + 3f * u, 26f * u),
+        size = Size(13f * u, 32f * u)
+    )
+
+    // sobrancelhas
+    drawLine(
+        Color(0xCC2B2620), Offset(cx - 10f * u, 36f * u), Offset(cx - 3f * u, 35f * u),
+        strokeWidth = 1.8f * u
+    )
+    drawLine(
+        Color(0xCC2B2620), Offset(cx + 3f * u, 35f * u), Offset(cx + 10f * u, 36f * u),
+        strokeWidth = 1.8f * u
     )
     // olhos
-    drawCircle(Color(0xFF20262E), 1.7f * u, Offset(cx - 6f * u, 40f * u))
-    drawCircle(Color(0xFF20262E), 1.7f * u, Offset(cx + 6f * u, 40f * u))
-    // boca
+    drawOval(Color(0xFFF4F6F8), Offset(cx - 9.5f * u, 38.5f * u), Size(7f * u, 4.5f * u))
+    drawOval(Color(0xFFF4F6F8), Offset(cx + 2.5f * u, 38.5f * u), Size(7f * u, 4.5f * u))
+    drawCircle(Color(0xFF20262E), 1.7f * u, Offset(cx - 6f * u, 40.7f * u))
+    drawCircle(Color(0xFF20262E), 1.7f * u, Offset(cx + 6f * u, 40.7f * u))
+    // nariz e boca
     drawLine(
-        Color(0x66000000),
-        Offset(cx - 4f * u, 50f * u), Offset(cx + 4f * u, 50f * u),
-        strokeWidth = 1.4f * u
+        Color(0x33000000), Offset(cx, 42f * u), Offset(cx - 1.5f * u, 47f * u),
+        strokeWidth = 1.2f * u
+    )
+    drawLine(
+        Color(0x88000000), Offset(cx - 4f * u, 52f * u), Offset(cx + 4f * u, 52f * u),
+        strokeWidth = 1.5f * u
     )
 
     drawHeadgear(avatar.headgear, cx, u, accent, skin)
+
+    // vinheta para destacar o retrato
+    drawCircle(
+        Brush.radialGradient(
+            listOf(Color(0x00000000), Color(0x00000000), Color(0x59000000)),
+            center = Offset(cx, h / 2f),
+            radius = radius
+        ),
+        radius = radius,
+        center = Offset(cx, h / 2f)
+    )
 
     // aro
     ringColor?.let {

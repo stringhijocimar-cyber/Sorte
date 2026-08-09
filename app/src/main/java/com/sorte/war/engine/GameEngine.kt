@@ -3,6 +3,7 @@ package com.sorte.war.engine
 import com.sorte.war.model.ArmyColor
 import com.sorte.war.model.Card
 import com.sorte.war.model.CardSymbol
+import com.sorte.war.model.Difficulty
 import com.sorte.war.model.MapData
 import com.sorte.war.model.Objective
 import com.sorte.war.model.Objectives
@@ -18,6 +19,7 @@ import kotlin.random.Random
  */
 class GameEngine(
     playerConfigs: List<PlayerConfig>,
+    val difficulty: Difficulty = Difficulty.VETERANO,
     private val rng: Random = Random(System.nanoTime()),
     skipSetup: Boolean = false
 ) {
@@ -204,7 +206,10 @@ class GameEngine(
         val terr = ownedCount(playerId)
         val base = maxOf(3, terr / 2)
         val bonus = fullyOwnedContinents(playerId).sumOf { MapData.continent(it).bonus }
-        return base + bonus
+        // vantagem concedida às CPUs conforme o nível de dificuldade escolhido
+        val handicap =
+            if (players[playerId].isHuman) 0 else difficulty.bonusReinforcements
+        return base + bonus + handicap
     }
 
     /** Coloca [count] exércitos num território próprio durante o reforço. */
@@ -425,6 +430,7 @@ class GameEngine(
         fun line(k: String, v: String) { sb.append(k).append('=').append(v).append('\n') }
 
         line("v", SAVE_VERSION.toString())
+        line("diff", difficulty.name)
         line("cur", currentPlayerIndex.toString())
         line("phase", phase.name)
         line("reinf", reinforcements.toString())
@@ -455,7 +461,7 @@ class GameEngine(
     }
 
     companion object {
-        const val SAVE_VERSION = 2
+        const val SAVE_VERSION = 3
         private const val FS = "\u0001" // separador de campos
         private const val GS = "\u0002" // separador de grupos
 
@@ -535,7 +541,10 @@ class GameEngine(
                         avatarId = it[7].toIntOrNull() ?: 0
                     )
                 }
-                val e = GameEngine(configs, skipSetup = true)
+                val diff = runCatching {
+                    Difficulty.valueOf(one("diff") ?: Difficulty.VETERANO.name)
+                }.getOrDefault(Difficulty.VETERANO)
+                val e = GameEngine(configs, diff, skipSetup = true)
 
                 parsed.forEachIndexed { idx, f ->
                     val p = e.players[idx]
