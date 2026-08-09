@@ -36,7 +36,16 @@ jobs:
         run: chmod +x ./gradlew
 
       - name: Compilar (assembleDebug)
-        run: ./gradlew assembleDebug --stacktrace
+        run: |
+          set -o pipefail
+          ./gradlew assembleDebug --console=plain 2>&1 | tee build.log
+
+      - name: Erros de compilação (resumo)
+        if: failure()
+        run: |
+          echo "=============== ERROS DE COMPILAÇÃO ==============="
+          grep -E "^(e:|w: .*error)" build.log | head -60 || echo "(nenhuma linha 'e:' encontrada)"
+          echo "=============== FIM DO RESUMO ==============="
 
       - name: Publicar APK como artefato
         uses: actions/upload-artifact@v4

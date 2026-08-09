@@ -140,7 +140,7 @@ private fun DrawScope.drawHeadgear(
                 )
             }
             drawArc(
-                cloth, startAngleDegrees = 200f, sweepAngleDegrees = 140f, useCenter = false,
+                cloth, 200f, 140f, false,
                 topLeft = Offset(cx - 19f * u, 17f * u), size = Size(38f * u, 34f * u),
                 style = Stroke(width = 2f * u)
             )
