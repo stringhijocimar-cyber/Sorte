@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Globe -->
+    <path
+        android:fillColor="#1E88E5"
+        android:pathData="M54,30 m-22,0 a22,22 0 1,0 44,0 a22,22 0 1,0 -44,0" />
+    <path
+        android:fillColor="#43A047"
+        android:pathData="M40,20 l8,4 l-2,8 l-8,2 l-4,-8 z" />
+    <path
+        android:fillColor="#43A047"
+        android:pathData="M60,26 l10,2 l2,10 l-8,6 l-8,-8 z" />
+    <path
+        android:fillColor="#43A047"
+        android:pathData="M44,40 l10,-2 l6,8 l-6,6 l-10,-4 z" />
+    <!-- Crossed swords -->
+    <path
+        android:strokeColor="#E0E4EA"
+        android:strokeWidth="4"
+        android:pathData="M38,84 L74,50" />
+    <path
+        android:strokeColor="#E0E4EA"
+        android:strokeWidth="4"
+        android:pathData="M70,84 L34,50" />
+    <path
+        android:fillColor="#FFB300"
+        android:pathData="M74,50 l6,-6 l2,2 l-6,6 z" />
+    <path
+        android:fillColor="#FFB300"
+        android:pathData="M34,50 l-6,-6 l-2,2 l6,6 z" />
+</vector>
