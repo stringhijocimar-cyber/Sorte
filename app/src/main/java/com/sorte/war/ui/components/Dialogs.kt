@@ -295,58 +295,23 @@ fun CardsDialog(
                         color = TextSecondary, style = MaterialTheme.typography.bodyMedium
                     )
                     Spacer(Modifier.height(10.dp))
-                    cards.forEachIndexed { i, card ->
-                        val isSel = i in selected
-                        val terrName = if (card.territoryId >= 0)
-                            com.sorte.war.model.MapData.territory(card.territoryId).name else "Coringa"
-                        val symbolColor = when (card.symbol) {
-                            CardSymbol.INFANTARIA -> Color(0xFF7CB8FF)
-                            CardSymbol.CAVALARIA -> Color(0xFF9CCC65)
-                            CardSymbol.CANHAO -> Color(0xFFFF8A65)
-                            CardSymbol.CORINGA -> Gold
-                        }
+                    // Cartas em grade, desenhadas como as do tabuleiro
+                    cards.chunked(3).forEachIndexed { rowIdx, rowCards ->
                         Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 4.dp)
-                                .background(
-                                    if (isSel) Gold.copy(alpha = 0.20f) else Color(0xFF1B2C44),
-                                    RoundedCornerShape(12.dp)
-                                )
-                                .border(
-                                    if (isSel) 2.dp else 1.dp,
-                                    if (isSel) Gold else Color(0xFF2A3B54),
-                                    RoundedCornerShape(12.dp)
-                                )
-                                .clickableNoRipple {
-                                    if (isSel) selected.remove(i)
-                                    else if (selected.size < 3) selected.add(i)
-                                }
-                                .padding(horizontal = 10.dp, vertical = 10.dp)
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(38.dp)
-                                    .background(symbolColor.copy(alpha = 0.18f), RoundedCornerShape(8.dp)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = when (card.symbol) {
-                                        CardSymbol.INFANTARIA -> Icons.Filled.Person
-                                        CardSymbol.CAVALARIA -> Icons.Filled.Shield
-                                        CardSymbol.CANHAO -> Icons.Filled.LocalFireDepartment
-                                        CardSymbol.CORINGA -> Icons.Filled.Star
-                                    },
-                                    contentDescription = card.symbol.label,
-                                    tint = symbolColor,
-                                    modifier = Modifier.size(22.dp)
+                            rowCards.forEachIndexed { colIdx, card ->
+                                val i = rowIdx * 3 + colIdx
+                                val isSel = i in selected
+                                WarCard(
+                                    card = card,
+                                    selected = isSel,
+                                    modifier = Modifier.clickableNoRipple {
+                                        if (isSel) selected.remove(i)
+                                        else if (selected.size < 3) selected.add(i)
+                                    }
                                 )
-                            }
-                            Spacer(Modifier.width(12.dp))
-                            Column {
-                                Text(card.symbol.label, color = Color.White, fontWeight = FontWeight.Bold)
-                                Text(terrName, color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
                             }
                         }
                     }

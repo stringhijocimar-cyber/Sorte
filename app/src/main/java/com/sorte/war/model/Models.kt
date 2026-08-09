@@ -8,11 +8,11 @@ enum class Phase {
     FIM_DE_JOGO
 }
 
-/** Símbolos das cartas de território (como no War: infantaria, cavalaria, canhão). */
+/** Símbolos das cartas de território, como no tabuleiro do War. */
 enum class CardSymbol(val label: String) {
-    INFANTARIA("Infantaria"),
-    CAVALARIA("Cavalaria"),
-    CANHAO("Canhão"),
+    CIRCULO("Círculo"),
+    QUADRADO("Quadrado"),
+    TRIANGULO("Triângulo"),
     CORINGA("Coringa")
 }
 

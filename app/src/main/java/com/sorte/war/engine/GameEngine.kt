@@ -118,7 +118,7 @@ class GameEngine(
     }
 
     private fun buildCardDeck() {
-        val symbols = listOf(CardSymbol.INFANTARIA, CardSymbol.CAVALARIA, CardSymbol.CANHAO)
+        val symbols = listOf(CardSymbol.CIRCULO, CardSymbol.QUADRADO, CardSymbol.TRIANGULO)
         MapData.territories.forEach { t ->
             drawPile.add(Card(symbols[t.id % 3], t.id))
         }
