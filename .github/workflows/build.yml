@@ -1,0 +1,60 @@
+name: Build APK
+
+on:
+  push:
+    branches:
+      - main
+      - "claude/**"
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Compilar APK de debug
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configurar JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Configurar Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Instalar pacotes do SDK
+        run: sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Tornar o gradlew executável
+        run: chmod +x ./gradlew
+
+      - name: Compilar (assembleDebug)
+        run: ./gradlew assembleDebug --stacktrace
+
+      - name: Publicar APK como artefato
+        uses: actions/upload-artifact@v4
+        with:
+          name: war-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+
+      - name: Publicar release para download fácil
+        if: github.event_name != 'pull_request'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: debug-latest
+          name: WAR — APK de debug (mais recente)
+          body: |
+            APK de debug do jogo **WAR — Domínio Mundial**, gerado automaticamente.
+
+            Para instalar no Android: baixe o `app-debug.apk`, permita "instalar de fontes
+            desconhecidas" e abra o arquivo no celular.
+          files: app/build/outputs/apk/debug/app-debug.apk
+          make_latest: true
