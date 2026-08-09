@@ -68,12 +68,10 @@ fun TopBar(
             .padding(horizontal = 12.dp, vertical = 8.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-            Box(
-                Modifier
-                    .size(22.dp)
-                    .clip(CircleShape)
-                    .background(Color(cur.colorArgb))
-                    .border(2.dp, Color.White.copy(alpha = 0.6f), CircleShape)
+            AvatarPortrait(
+                avatar = com.sorte.war.model.Avatar.byId(cur.avatarId),
+                sizeDp = 34,
+                ringColor = Color(cur.colorArgb)
             )
             Spacer(Modifier.width(8.dp))
             Column(Modifier.weight(1f)) {

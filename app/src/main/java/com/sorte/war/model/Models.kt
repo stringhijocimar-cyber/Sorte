@@ -47,6 +47,8 @@ data class Player(
     val name: String,
     val colorArgb: Long,
     val isHuman: Boolean,
+    /** Índice do comandante histórico escolhido como avatar. */
+    val avatarId: Int = 0,
     var eliminated: Boolean = false,
     val cards: MutableList<Card> = mutableListOf(),
     var objective: Objective? = null

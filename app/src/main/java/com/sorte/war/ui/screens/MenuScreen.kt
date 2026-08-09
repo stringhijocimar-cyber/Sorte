@@ -42,8 +42,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import com.sorte.war.model.Avatar
 import com.sorte.war.model.PlayerPalette
 import com.sorte.war.ui.GameViewModel
+import com.sorte.war.ui.components.AvatarPortrait
 import com.sorte.war.ui.theme.Gold
 import com.sorte.war.ui.theme.NightNavy
 import com.sorte.war.ui.theme.OceanDeep
@@ -55,6 +59,7 @@ fun MenuScreen(vm: GameViewModel) {
     var name by remember { mutableStateOf("Você") }
     var players by remember { mutableIntStateOf(4) }
     var colorIndex by remember { mutableIntStateOf(0) }
+    var avatarIndex by remember { mutableIntStateOf(0) }
 
     Box(
         modifier = Modifier
@@ -193,6 +198,47 @@ fun MenuScreen(vm: GameViewModel) {
                         style = MaterialTheme.typography.bodyMedium,
                         color = TextSecondary
                     )
+
+                    Spacer(Modifier.height(20.dp))
+                    Text(
+                        "Seu comandante",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = TextSecondary
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState())
+                    ) {
+                        Avatar.all.forEachIndexed { i, av ->
+                            val sel = avatarIndex == i
+                            Box(
+                                modifier = Modifier.clickableNoRipple { avatarIndex = i },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                AvatarPortrait(
+                                    avatar = av,
+                                    sizeDp = if (sel) 62 else 54,
+                                    ringColor = if (sel) Gold else Color(0x33FFFFFF)
+                                )
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    val chosen = Avatar.byId(avatarIndex)
+                    Text(
+                        "${chosen.commander} — ${chosen.epithet}",
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Text(
+                        chosen.era,
+                        color = TextSecondary,
+                        style = MaterialTheme.typography.labelSmall
+                    )
                 }
             }
 
@@ -230,7 +276,7 @@ fun MenuScreen(vm: GameViewModel) {
             }
 
             Button(
-                onClick = { vm.startGame(name, players, colorIndex) },
+                onClick = { vm.startGame(name, players, colorIndex, avatarIndex) },
                 colors = ButtonDefaults.buttonColors(containerColor = Gold, contentColor = NightNavy),
                 shape = RoundedCornerShape(16.dp),
                 modifier = Modifier

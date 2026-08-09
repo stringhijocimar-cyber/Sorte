@@ -11,6 +11,7 @@ import com.sorte.war.data.GameStorage
 import com.sorte.war.data.SaveInfo
 import com.sorte.war.engine.Ai
 import com.sorte.war.engine.GameEngine
+import com.sorte.war.model.Avatar
 import com.sorte.war.model.BattleResult
 import com.sorte.war.model.Card
 import com.sorte.war.model.Phase
@@ -87,14 +88,30 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     // Navegação
     // ---------------------------------------------------------------------
 
-    fun startGame(humanName: String, totalPlayers: Int, humanColorIndex: Int) {
+    fun startGame(
+        humanName: String,
+        totalPlayers: Int,
+        humanColorIndex: Int,
+        humanAvatarId: Int = 0
+    ) {
         val palette = PlayerPalette.ordered
         val humanColor = palette[humanColorIndex.coerceIn(0, palette.size - 1)]
         val others = palette.filter { it != humanColor }
+        // cada CPU recebe um comandante histórico diferente do seu
+        val cpuAvatars = Avatar.all.indices.filter { it != humanAvatarId }.shuffled()
         val configs = buildList {
-            add(GameEngine.PlayerConfig(humanName.ifBlank { "Você" }, humanColor, true))
+            add(
+                GameEngine.PlayerConfig(
+                    humanName.ifBlank { "Você" }, humanColor, true, humanAvatarId
+                )
+            )
             for (i in 1 until totalPlayers) {
-                add(GameEngine.PlayerConfig("CPU $i", others[i - 1], false))
+                val av = cpuAvatars[(i - 1) % cpuAvatars.size]
+                add(
+                    GameEngine.PlayerConfig(
+                        Avatar.byId(av).commander, others[i - 1], false, av
+                    )
+                )
             }
         }
         engine = GameEngine(configs)

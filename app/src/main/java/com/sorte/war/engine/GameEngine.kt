@@ -21,10 +21,18 @@ class GameEngine(
     private val rng: Random = Random(System.nanoTime()),
     skipSetup: Boolean = false
 ) {
-    data class PlayerConfig(val name: String, val color: ArmyColor, val isHuman: Boolean)
+    data class PlayerConfig(
+        val name: String,
+        val color: ArmyColor,
+        val isHuman: Boolean,
+        val avatarId: Int = 0
+    )
 
     val players: List<Player> = playerConfigs.mapIndexed { i, c ->
-        Player(id = i, name = c.name, colorArgb = c.color.argb, isHuman = c.isHuman)
+        Player(
+            id = i, name = c.name, colorArgb = c.color.argb,
+            isHuman = c.isHuman, avatarId = c.avatarId
+        )
     }
 
     private val n = MapData.territories.size
@@ -438,7 +446,8 @@ class GameEngine(
                 if (p.isHuman) "1" else "0",
                 if (p.eliminated) "1" else "0",
                 p.cards.joinToString(";") { cardToText(it) },
-                objectiveToText(p.objective)
+                objectiveToText(p.objective),
+                p.avatarId.toString()
             )
             line("p", fields.joinToString(FS))
         }
@@ -446,7 +455,7 @@ class GameEngine(
     }
 
     companion object {
-        const val SAVE_VERSION = 1
+        const val SAVE_VERSION = 2
         private const val FS = "\u0001" // separador de campos
         private const val GS = "\u0002" // separador de grupos
 
@@ -516,13 +525,14 @@ class GameEngine(
                 if (rows.isEmpty()) return null
 
                 val parsed = rows.map { it.split(FS) }
-                if (parsed.any { it.size < 7 }) return null
+                if (parsed.any { it.size < 8 }) return null
 
                 val configs = parsed.map {
                     PlayerConfig(
                         name = it[1],
                         color = ArmyColor(it[1], it[2].toLong()),
-                        isHuman = it[3] == "1"
+                        isHuman = it[3] == "1",
+                        avatarId = it[7].toIntOrNull() ?: 0
                     )
                 }
                 val e = GameEngine(configs, skipSetup = true)
