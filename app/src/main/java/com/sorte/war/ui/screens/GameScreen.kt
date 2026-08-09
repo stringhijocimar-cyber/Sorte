@@ -14,6 +14,7 @@ import com.sorte.war.ui.components.AdvanceDialog
 import com.sorte.war.ui.components.BattleDialog
 import com.sorte.war.ui.components.BottomBar
 import com.sorte.war.ui.components.CardsDialog
+import com.sorte.war.ui.components.CommanderReportDialog
 import com.sorte.war.ui.components.FortifyDialog
 import com.sorte.war.ui.components.MapCanvas
 import com.sorte.war.ui.components.ObjectiveDialog
@@ -40,6 +41,8 @@ fun GameScreen(vm: GameViewModel) {
         TopBar(
             engine = engine,
             refresh = refresh,
+            soundEnabled = vm.soundEnabled,
+            onToggleSound = { vm.toggleSound() },
             onObjective = { vm.openObjective() },
             onCards = { vm.openCards() }
         )
@@ -69,8 +72,13 @@ fun GameScreen(vm: GameViewModel) {
             result = result,
             attackerName = engine.currentPlayer.name,
             defenderName = "Defensor",
+            sound = vm.sound,
             onDismiss = { vm.dismissBattle() }
         )
+    }
+
+    vm.commanderReport?.let { report ->
+        CommanderReportDialog(report = report, onClose = { vm.dismissReport() })
     }
 
     if (vm.showAdvanceDialog) {

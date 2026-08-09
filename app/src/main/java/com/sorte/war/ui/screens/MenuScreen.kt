@@ -1,6 +1,7 @@
 package com.sorte.war.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,6 +16,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material3.Button
@@ -40,6 +42,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.sorte.war.model.PlayerPalette
 import com.sorte.war.ui.GameViewModel
 import com.sorte.war.ui.theme.Gold
 import com.sorte.war.ui.theme.NightNavy
@@ -51,6 +54,7 @@ import com.sorte.war.ui.theme.TextSecondary
 fun MenuScreen(vm: GameViewModel) {
     var name by remember { mutableStateOf("Você") }
     var players by remember { mutableIntStateOf(4) }
+    var colorIndex by remember { mutableIntStateOf(0) }
 
     Box(
         modifier = Modifier
@@ -144,13 +148,58 @@ fun MenuScreen(vm: GameViewModel) {
                         style = MaterialTheme.typography.bodyMedium,
                         color = TextSecondary
                     )
+
+                    Spacer(Modifier.height(20.dp))
+                    Text(
+                        "Cor do seu exército",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = TextSecondary
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        PlayerPalette.ordered.forEachIndexed { i, army ->
+                            val selected = colorIndex == i
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(army.argb))
+                                    .border(
+                                        width = if (selected) 3.dp else 1.dp,
+                                        color = if (selected) Gold else Color(0x55FFFFFF),
+                                        shape = CircleShape
+                                    )
+                                    .clickableNoRipple { colorIndex = i },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (selected) {
+                                    Icon(
+                                        Icons.Filled.Check,
+                                        contentDescription = army.name,
+                                        tint = if (army.argb == 0xFFFDD835 || army.argb == 0xFFECEFF1)
+                                            NightNavy else Color.White,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        "Cor escolhida: ${PlayerPalette.ordered[colorIndex].name}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = TextSecondary
+                    )
                 }
             }
 
             Spacer(Modifier.height(28.dp))
 
             Button(
-                onClick = { vm.startGame(name, players) },
+                onClick = { vm.startGame(name, players, colorIndex) },
                 colors = ButtonDefaults.buttonColors(containerColor = Gold, contentColor = NightNavy),
                 shape = RoundedCornerShape(16.dp),
                 modifier = Modifier

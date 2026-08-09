@@ -19,6 +19,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Style
+import androidx.compose.material.icons.filled.VolumeOff
+import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -51,6 +53,8 @@ private fun phaseName(p: Phase) = when (p) {
 fun TopBar(
     engine: GameEngine,
     refresh: Int,
+    soundEnabled: Boolean,
+    onToggleSound: () -> Unit,
     onObjective: () -> Unit,
     onCards: () -> Unit
 ) {
@@ -80,7 +84,13 @@ fun TopBar(
                     color = Gold, style = MaterialTheme.typography.labelSmall
                 )
             }
+            HudIconButton(
+                if (soundEnabled) Icons.Filled.VolumeUp else Icons.Filled.VolumeOff,
+                if (soundEnabled) "Som" else "Mudo",
+                onToggleSound
+            )
             if (cur.isHuman) {
+                Spacer(Modifier.width(8.dp))
                 HudIconButton(Icons.Filled.Flag, "Objetivo", onObjective)
                 Spacer(Modifier.width(8.dp))
                 HudIconButton(Icons.Filled.Style, "Cartas (${cur.cards.size})", onCards)

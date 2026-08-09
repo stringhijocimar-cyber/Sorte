@@ -1,10 +1,11 @@
 package com.sorte.war.ui
 
+import android.app.Application
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.lifecycle.ViewModel
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.sorte.war.engine.Ai
 import com.sorte.war.engine.GameEngine
@@ -17,19 +18,31 @@ import kotlinx.coroutines.launch
 
 enum class Screen { MENU, GAME }
 
-class GameViewModel : ViewModel() {
+/** Relatório narrativo do comandante entregue ao início da rodada do jogador. */
+data class CommanderReport(
+    val lost: List<Pair<String, String>>, // território -> cor inimiga
+    val remainingTerritories: Int,
+    val incomingReinforcements: Int,
+    val flavor: String
+)
+
+class GameViewModel(app: Application) : AndroidViewModel(app) {
+
+    val sound: SoundManager by lazy { SoundManager(getApplication<Application>()) }
 
     var screen by mutableStateOf(Screen.MENU)
         private set
-
     var engine: GameEngine? = null
         private set
-
-    /** Contador de atualização: qualquer mutação incrementa para recompor a UI. */
     var refresh by mutableIntStateOf(0)
         private set
 
-    // Seleções de interação
+    var soundEnabled by mutableStateOf(true)
+        private set
+
+    private val humanId = 0
+
+    // Seleções
     var selectedTerritory by mutableStateOf<Int?>(null)
         private set
 
@@ -38,7 +51,7 @@ class GameViewModel : ViewModel() {
         private set
     var showAdvanceDialog by mutableStateOf(false)
         private set
-    var fortifyTarget by mutableStateOf<Int?>(null) // destino escolhido, abre slider
+    var fortifyTarget by mutableStateOf<Int?>(null)
         private set
     var showCards by mutableStateOf(false)
         private set
@@ -48,20 +61,33 @@ class GameViewModel : ViewModel() {
         private set
     var statusMessage by mutableStateOf<String?>(null)
         private set
+    var commanderReport by mutableStateOf<CommanderReport?>(null)
+        private set
 
     private var aiRunning = false
+    private var humanTerritoriesBeforeAi: Set<Int> = emptySet()
+    private var endSoundPlayed = false
 
     private fun bump() { refresh++ }
 
+    fun toggleSound() {
+        soundEnabled = !soundEnabled
+        sound.enabled = soundEnabled
+        bump()
+    }
+
     // ---------------------------------------------------------------------
-    // Navegação / criação de partida
+    // Navegação
     // ---------------------------------------------------------------------
 
-    fun startGame(humanName: String, totalPlayers: Int) {
+    fun startGame(humanName: String, totalPlayers: Int, humanColorIndex: Int) {
+        val palette = PlayerPalette.ordered
+        val humanColor = palette[humanColorIndex.coerceIn(0, palette.size - 1)]
+        val others = palette.filter { it != humanColor }
         val configs = buildList {
-            add(GameEngine.PlayerConfig(humanName.ifBlank { "Você" }, PlayerPalette.ordered[0], true))
+            add(GameEngine.PlayerConfig(humanName.ifBlank { "Você" }, humanColor, true))
             for (i in 1 until totalPlayers) {
-                add(GameEngine.PlayerConfig("CPU $i", PlayerPalette.ordered[i], false))
+                add(GameEngine.PlayerConfig("CPU $i", others[i - 1], false))
             }
         }
         engine = GameEngine(configs)
@@ -69,10 +95,13 @@ class GameViewModel : ViewModel() {
         battleDialog = null
         showAdvanceDialog = false
         fortifyTarget = null
-        statusMessage = "Sua vez — distribua seus reforços."
+        commanderReport = null
+        endSoundPlayed = false
+        humanTerritoriesBeforeAi = emptySet()
+        statusMessage = "Sua vez, Comandante — distribua seus reforços."
         screen = Screen.GAME
+        sound.play(Sfx.CLICK)
         bump()
-        runAiIfNeeded()
     }
 
     fun backToMenu() {
@@ -81,10 +110,11 @@ class GameViewModel : ViewModel() {
         bump()
     }
 
-    fun openCards() { showCards = true }
+    fun openCards() { showCards = true; sound.play(Sfx.CLICK) }
     fun closeCards() { showCards = false }
-    fun openObjective() { showObjective = true }
+    fun openObjective() { showObjective = true; sound.play(Sfx.CLICK) }
     fun closeObjective() { showObjective = false }
+    fun dismissReport() { commanderReport = null; bump() }
 
     // ---------------------------------------------------------------------
     // Interação com o mapa
@@ -105,9 +135,10 @@ class GameViewModel : ViewModel() {
         if (e.ownerOf[id] == e.currentPlayerIndex && e.reinforcements > 0) {
             e.reinforce(id, 1)
             selectedTerritory = id
+            sound.play(Sfx.CLICK, 0.6f)
             statusMessage = if (e.reinforcements > 0)
                 "Reforços restantes: ${e.reinforcements}"
-            else "Reforços concluídos — toque em Avançar para atacar."
+            else "Reforços concluídos — avance para o ataque."
             bump()
         }
     }
@@ -118,23 +149,20 @@ class GameViewModel : ViewModel() {
             if (e.canAttackFrom(id)) {
                 selectedTerritory = id
                 statusMessage = "Escolha um território inimigo vizinho para atacar."
-            } else {
-                selectedTerritory = null
-            }
-            bump()
-            return
+            } else selectedTerritory = null
+            bump(); return
         }
-        // Já há origem selecionada
         if (id == from) { selectedTerritory = null; bump(); return }
         if (e.ownerOf[id] == e.currentPlayerIndex) {
             selectedTerritory = if (e.canAttackFrom(id)) id else null
             bump(); return
         }
         if (id in e.attackTargets(from)) {
-            val result = e.attack(from, id) // move mínimo por padrão
+            val result = e.attack(from, id)
             if (result != null) {
                 battleDialog = result
                 if (!e.canAttackFrom(from)) selectedTerritory = null
+                checkEndSound()
             }
             bump()
         }
@@ -167,23 +195,12 @@ class GameViewModel : ViewModel() {
     fun dismissBattle() {
         val e = engine
         battleDialog = null
-        if (e?.pendingAdvance != null) {
-            showAdvanceDialog = true
-        }
+        if (e?.pendingAdvance != null) showAdvanceDialog = true
         bump()
     }
 
-    fun confirmAdvance(extra: Int) {
-        engine?.advanceMore(extra)
-        showAdvanceDialog = false
-        bump()
-    }
-
-    fun cancelAdvance() {
-        engine?.clearPendingAdvance()
-        showAdvanceDialog = false
-        bump()
-    }
+    fun confirmAdvance(extra: Int) { engine?.advanceMore(extra); showAdvanceDialog = false; bump() }
+    fun cancelAdvance() { engine?.clearPendingAdvance(); showAdvanceDialog = false; bump() }
 
     fun confirmFortify(count: Int) {
         val e = engine ?: return
@@ -191,22 +208,21 @@ class GameViewModel : ViewModel() {
         val to = fortifyTarget
         if (from != null && to != null) {
             e.fortify(from, to, count)
+            sound.play(Sfx.CLICK)
         }
         fortifyTarget = null
         selectedTerritory = null
         bump()
     }
 
-    fun cancelFortify() {
-        fortifyTarget = null
-        bump()
-    }
+    fun cancelFortify() { fortifyTarget = null; bump() }
 
     fun tradeCards(cards: List<Card>) {
         val e = engine ?: return
         val gained = e.tradeCards(cards)
         if (gained > 0) {
-            statusMessage = "Você trocou cartas e ganhou $gained exércitos!"
+            sound.play(Sfx.CONQUER, 0.7f)
+            statusMessage = "Você trocou cartas e recrutou $gained exércitos!"
         }
         bump()
     }
@@ -226,23 +242,28 @@ class GameViewModel : ViewModel() {
         e.advancePhase()
         selectedTerritory = null
         fortifyTarget = null
+        sound.play(Sfx.CLICK)
         statusMessage = when (e.phase) {
             Phase.ATAQUE -> "Fase de ataque — selecione um território seu."
             Phase.DESLOCAMENTO -> "Fase de deslocamento — mova tropas (opcional)."
             else -> statusMessage
         }
         bump()
-        if (wasDeslocamento) runAiIfNeeded()
+        if (wasDeslocamento) startAiRound()
     }
 
     // ---------------------------------------------------------------------
-    // Turnos da IA
+    // Turnos da IA + Relatório do Comandante
     // ---------------------------------------------------------------------
 
-    private fun runAiIfNeeded() {
+    private fun startAiRound() {
         val e = engine ?: return
         if (aiRunning) return
-        if (e.currentPlayer.isHuman || e.winnerId != null) return
+        if (e.currentPlayer.isHuman || e.winnerId != null) {
+            checkEndSound(); return
+        }
+        // Guarda o estado dos territórios do jogador antes da rodada inimiga.
+        humanTerritoriesBeforeAi = e.territoriesOf(humanId).toSet()
         aiRunning = true
         aiThinking = true
         bump()
@@ -250,20 +271,74 @@ class GameViewModel : ViewModel() {
             while (true) {
                 val eng = engine ?: break
                 if (eng.currentPlayer.isHuman || eng.winnerId != null) break
-                statusMessage = "${eng.currentPlayer.name} está jogando..."
+                statusMessage = "${eng.currentPlayer.name} avança suas tropas..."
                 bump()
-                delay(700)
+                delay(650)
                 Ai.playTurn(eng)
+                // Estrondo distante de batalha durante o turno inimigo.
+                sound.play(Sfx.CANNON, 0.25f)
                 bump()
-                delay(300)
+                delay(250)
             }
             aiRunning = false
             aiThinking = false
-            val eng = engine
-            if (eng != null && eng.winnerId == null && eng.currentPlayer.isHuman) {
-                statusMessage = "Sua vez — distribua seus reforços."
-            }
+            checkEndSound()
+            buildCommanderReport()
             bump()
         }
+    }
+
+    private fun buildCommanderReport() {
+        val e = engine ?: return
+        if (e.winnerId != null) return
+        if (!e.currentPlayer.isHuman) return
+        if (humanTerritoriesBeforeAi.isEmpty()) {
+            statusMessage = "Sua vez, Comandante."
+            return
+        }
+        val nowOwned = e.territoriesOf(humanId).toSet()
+        val lostIds = humanTerritoriesBeforeAi - nowOwned
+        val lost = lostIds.map { id ->
+            val t = com.sorte.war.model.MapData.territory(id)
+            val enemy = e.ownerOf[id]
+            val enemyName = if (enemy in e.players.indices) e.players[enemy].name else "inimigo"
+            t.name to enemyName
+        }
+        val flavor = if (lost.isEmpty()) HOLD_MESSAGES.random() else LOSS_MESSAGES.random()
+        commanderReport = CommanderReport(
+            lost = lost,
+            remainingTerritories = nowOwned.size,
+            incomingReinforcements = e.reinforcements,
+            flavor = flavor
+        )
+        statusMessage = "Sua vez, Comandante — distribua seus reforços."
+    }
+
+    private fun checkEndSound() {
+        val e = engine ?: return
+        val w = e.winnerId ?: return
+        if (endSoundPlayed) return
+        endSoundPlayed = true
+        if (e.players[w].isHuman) sound.play(Sfx.VICTORY) else sound.play(Sfx.DEFEAT)
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        sound.release()
+    }
+
+    companion object {
+        private val HOLD_MESSAGES = listOf(
+            "\"Nossas linhas resistiram, Comandante. O inimigo recuou.\"",
+            "\"As fronteiras estão seguras. As tropas aguardam suas ordens.\"",
+            "\"Nenhuma perda nesta rodada, senhor. Moral elevada!\"",
+            "\"Mantivemos cada palmo de terra. Estamos prontos para avançar.\""
+        )
+        private val LOSS_MESSAGES = listOf(
+            "\"Comandante, sofremos baixas. O inimigo tomou terreno!\"",
+            "\"Perdemos posições, senhor. Precisamos reagrupar e contra-atacar!\"",
+            "\"As linhas foram rompidas em alguns pontos. Aguardamos reforços!\"",
+            "\"O inimigo avançou sobre nós. Vingança, Comandante!\""
+        )
     }
 }

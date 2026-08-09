@@ -15,7 +15,13 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.Canvas
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.LocalFireDepartment
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -25,8 +31,10 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -42,7 +50,12 @@ import androidx.compose.ui.unit.sp
 import com.sorte.war.engine.GameEngine
 import com.sorte.war.model.BattleResult
 import com.sorte.war.model.Card as GameCard
+import com.sorte.war.model.CardSymbol
+import com.sorte.war.ui.CommanderReport
+import com.sorte.war.ui.Sfx
+import com.sorte.war.ui.SoundManager
 import com.sorte.war.ui.screens.clickableNoRipple
+import kotlinx.coroutines.delay
 import com.sorte.war.ui.theme.Gold
 import com.sorte.war.ui.theme.NightNavy
 import com.sorte.war.ui.theme.PanelNavy
@@ -89,22 +102,41 @@ fun BattleDialog(
     result: BattleResult,
     attackerName: String,
     defenderName: String,
+    sound: SoundManager?,
     onDismiss: () -> Unit
 ) {
+    var revealed by remember(result) { mutableStateOf(false) }
+    var tick by remember(result) { mutableIntStateOf(0) }
+
+    LaunchedEffect(result) {
+        revealed = false
+        tick = 0
+        sound?.play(Sfx.DICE)
+        repeat(9) { delay(90); tick++ }
+        revealed = true
+        sound?.play(Sfx.CANNON)
+        sound?.play(Sfx.GUNFIRE, 0.8f)
+        if (result.conquered) { delay(220); sound?.play(Sfx.CONQUER) }
+    }
+
+    fun faceFor(actual: Int, index: Int): Int =
+        if (revealed) actual else ((tick * 7 + index * 13 + actual) % 6) + 1
+
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = { if (revealed) onDismiss() },
         containerColor = PanelNavy,
         confirmButton = {
             Button(
                 onClick = onDismiss,
+                enabled = revealed,
                 colors = ButtonDefaults.buttonColors(containerColor = Gold, contentColor = NightNavy)
             ) { Text("Continuar", fontWeight = FontWeight.Bold) }
         },
         title = {
             Text(
-                if (result.conquered) "Território conquistado!" else "Resultado do combate",
-                color = Gold,
-                fontWeight = FontWeight.Bold
+                if (!revealed) "Rolando os dados..."
+                else if (result.conquered) "Território conquistado!" else "Resultado do combate",
+                color = Gold, fontWeight = FontWeight.Bold
             )
         },
         text = {
@@ -113,8 +145,8 @@ fun BattleDialog(
                 Spacer(Modifier.height(6.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     result.attackerDice.forEachIndexed { i, v ->
-                        val win = winFor(result.attackerDice, result.defenderDice, i, attacker = true)
-                        DieFace(v, win)
+                        val win = if (revealed) winFor(result.attackerDice, result.defenderDice, i, true) else null
+                        DieFace(faceFor(v, i), win)
                     }
                 }
                 Spacer(Modifier.height(14.dp))
@@ -122,19 +154,22 @@ fun BattleDialog(
                 Spacer(Modifier.height(6.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     result.defenderDice.forEachIndexed { i, v ->
-                        val win = winFor(result.attackerDice, result.defenderDice, i, attacker = false)
-                        DieFace(v, win)
+                        val win = if (revealed) winFor(result.attackerDice, result.defenderDice, i, false) else null
+                        DieFace(faceFor(v, i + 3), win)
                     }
                 }
                 Spacer(Modifier.height(16.dp))
-                Text(
-                    "Baixas — atacante: ${result.attackerLosses}   |   defensor: ${result.defenderLosses}",
-                    color = TextSecondary,
-                    style = MaterialTheme.typography.bodyMedium
-                )
-                if (result.conquered) {
-                    Spacer(Modifier.height(8.dp))
-                    Text("Vitória! O território agora é seu.", color = Color(0xFF7CF5A0), fontWeight = FontWeight.Bold)
+                if (revealed) {
+                    Text(
+                        "Baixas — atacante: ${result.attackerLosses}   |   defensor: ${result.defenderLosses}",
+                        color = TextSecondary, style = MaterialTheme.typography.bodyMedium
+                    )
+                    if (result.conquered) {
+                        Spacer(Modifier.height(8.dp))
+                        Text("Vitória! O território agora é seu.", color = Color(0xFF7CF5A0), fontWeight = FontWeight.Bold)
+                    }
+                } else {
+                    Text("As tropas se enfrentam...", color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
                 }
             }
         }
@@ -263,7 +298,13 @@ fun CardsDialog(
                     cards.forEachIndexed { i, card ->
                         val isSel = i in selected
                         val terrName = if (card.territoryId >= 0)
-                            com.sorte.war.model.MapData.territory(card.territoryId).name else "—"
+                            com.sorte.war.model.MapData.territory(card.territoryId).name else "Coringa"
+                        val symbolColor = when (card.symbol) {
+                            CardSymbol.INFANTARIA -> Color(0xFF7CB8FF)
+                            CardSymbol.CAVALARIA -> Color(0xFF9CCC65)
+                            CardSymbol.CANHAO -> Color(0xFFFF8A65)
+                            CardSymbol.CORINGA -> Gold
+                        }
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
@@ -271,21 +312,42 @@ fun CardsDialog(
                                 .padding(vertical = 4.dp)
                                 .background(
                                     if (isSel) Gold.copy(alpha = 0.20f) else Color(0xFF1B2C44),
-                                    RoundedCornerShape(10.dp)
+                                    RoundedCornerShape(12.dp)
                                 )
                                 .border(
-                                    1.dp,
+                                    if (isSel) 2.dp else 1.dp,
                                     if (isSel) Gold else Color(0xFF2A3B54),
-                                    RoundedCornerShape(10.dp)
+                                    RoundedCornerShape(12.dp)
                                 )
                                 .clickableNoRipple {
                                     if (isSel) selected.remove(i)
                                     else if (selected.size < 3) selected.add(i)
                                 }
-                                .padding(horizontal = 12.dp, vertical = 10.dp)
+                                .padding(horizontal = 10.dp, vertical = 10.dp)
                         ) {
-                            Text(card.symbol.label, color = Color.White, fontWeight = FontWeight.Bold, modifier = Modifier.width(96.dp))
-                            Text(terrName, color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
+                            Box(
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .background(symbolColor.copy(alpha = 0.18f), RoundedCornerShape(8.dp)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = when (card.symbol) {
+                                        CardSymbol.INFANTARIA -> Icons.Filled.Person
+                                        CardSymbol.CAVALARIA -> Icons.Filled.Shield
+                                        CardSymbol.CANHAO -> Icons.Filled.LocalFireDepartment
+                                        CardSymbol.CORINGA -> Icons.Filled.Star
+                                    },
+                                    contentDescription = card.symbol.label,
+                                    tint = symbolColor,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
+                            Spacer(Modifier.width(12.dp))
+                            Column {
+                                Text(card.symbol.label, color = Color.White, fontWeight = FontWeight.Bold)
+                                Text(terrName, color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
+                            }
                         }
                     }
                     if (!canTradeNow) {
@@ -293,6 +355,57 @@ fun CardsDialog(
                         Text("A troca só é possível na fase de reforço.", color = Color(0xFFFFB74D), style = MaterialTheme.typography.labelSmall)
                     }
                 }
+            }
+        }
+    )
+}
+
+@Composable
+fun CommanderReportDialog(report: CommanderReport, onClose: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onClose,
+        containerColor = PanelNavy,
+        confirmButton = {
+            Button(
+                onClick = onClose,
+                colors = ButtonDefaults.buttonColors(containerColor = Gold, contentColor = NightNavy)
+            ) { Text("Às ordens!", fontWeight = FontWeight.Bold) }
+        },
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Filled.Shield, contentDescription = null, tint = Gold)
+                Spacer(Modifier.width(8.dp))
+                Text("Relatório do Comandante", color = Gold, fontWeight = FontWeight.Bold)
+            }
+        },
+        text = {
+            Column {
+                Text(report.flavor, color = Color.White, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(12.dp))
+                if (report.lost.isEmpty()) {
+                    Text("Nenhum território perdido nesta rodada.", color = Color(0xFF7CF5A0))
+                } else {
+                    Text(
+                        "Territórios perdidos (${report.lost.size}):",
+                        color = Color(0xFFFF8A80), style = MaterialTheme.typography.labelLarge
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    report.lost.take(8).forEach { (terr, enemy) ->
+                        Text("• $terr — tomado por $enemy", color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
+                    }
+                    if (report.lost.size > 8) {
+                        Text("• …e mais ${report.lost.size - 8}", color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    "Territórios sob seu comando: ${report.remainingTerritories}",
+                    color = Color.White, style = MaterialTheme.typography.bodyMedium
+                )
+                Text(
+                    "Reforços disponíveis: ${report.incomingReinforcements}",
+                    color = Gold, fontWeight = FontWeight.Bold
+                )
             }
         }
     )
