@@ -21,6 +21,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
 import com.sorte.war.engine.GameEngine
@@ -33,8 +34,8 @@ import kotlin.math.sin
 
 private const val VW = MapData.VIRTUAL_WIDTH
 private const val VH = MapData.VIRTUAL_HEIGHT
-private const val REGION_R = 27f // raio-base da região em unidades virtuais
-private const val REGION_POINTS = 12
+private const val REGION_R = 28f
+private const val REGION_POINTS = 14
 
 @Composable
 fun MapCanvas(
@@ -72,10 +73,10 @@ fun MapCanvas(
     Canvas(
         modifier = modifier
             .fillMaxSize()
-            .background(Brush.verticalGradient(listOf(Color(0xFF10314F), Color(0xFF0A1626))))
+            .background(Brush.verticalGradient(listOf(Color(0xFF0E3350), Color(0xFF071019))))
             .pointerInput(Unit) {
                 detectTransformGestures { _, pan, zoom, _ ->
-                    userScale = (userScale * zoom).coerceIn(1f, 4.5f)
+                    userScale = (userScale * zoom).coerceIn(1f, 5f)
                     panX += pan.x
                     panY += pan.y
                 }
@@ -97,15 +98,13 @@ fun MapCanvas(
             }
     ) {
         val s = baseScale(size) * userScale
-        drawOceanGrid { x, y -> project(size, x, y) }
-        drawContinentTints { x, y -> project(size, x, y) }
+        drawOcean { x, y -> project(size, x, y) }
         drawEdges { x, y -> project(size, x, y) }
         drawTerritories(engine, selectedTerritory, validTargets, s) { x, y -> project(size, x, y) }
         drawContinentLabels(s) { x, y -> project(size, x, y) }
     }
 }
 
-/** Hash determinístico 0..1 para gerar contornos orgânicos estáveis. */
 private fun hash01(a: Int, b: Int): Float {
     val x = sin(a * 12.9898 + b * 78.233) * 43758.5453
     return (x - floor(x)).toFloat()
@@ -117,7 +116,7 @@ private fun buildRegionPath(t: Territory, scaleR: Float, project: (Float, Float)
         val ang = 2.0 * Math.PI * k / REGION_POINTS
         val rr = REGION_R * scaleR * (0.80f + 0.42f * hash01(t.id + 1, k))
         val vx = t.x + (cos(ang) * rr).toFloat()
-        val vy = t.y + (sin(ang) * rr * 0.86f).toFloat() // levemente achatado
+        val vy = t.y + (sin(ang) * rr * 0.86f).toFloat()
         val p = project(vx, vy)
         if (k == 0) path.moveTo(p.x, p.y) else path.lineTo(p.x, p.y)
     }
@@ -125,26 +124,25 @@ private fun buildRegionPath(t: Territory, scaleR: Float, project: (Float, Float)
     return path
 }
 
-private fun DrawScope.drawOceanGrid(project: (Float, Float) -> Offset) {
-    val grid = Color(0x14BFE3FF)
+/** Cor de terreno (bioma) por continente — visível sob a posse translúcida. */
+private fun landColor(continentId: Int): Color = when (continentId) {
+    0 -> Color(0xFF6B7A4E) // América do Norte
+    1 -> Color(0xFF5E7A45) // América do Sul
+    2 -> Color(0xFF6E7658) // Europa
+    3 -> Color(0xFF8A7B4E) // África (savana)
+    4 -> Color(0xFF77754E) // Ásia (estepe)
+    else -> Color(0xFF7A6A46) // Oceania (outback)
+}
+
+private fun DrawScope.drawOcean(project: (Float, Float) -> Offset) {
+    val grid = Color(0x12BFE3FF)
     var gx = 0f
     while (gx <= VW) {
-        drawLine(grid, project(gx, 0f), project(gx, VH), strokeWidth = 1f)
-        gx += 100f
+        drawLine(grid, project(gx, 0f), project(gx, VH), strokeWidth = 1f); gx += 100f
     }
     var gy = 0f
     while (gy <= VH) {
-        drawLine(grid, project(0f, gy), project(VW, gy), strokeWidth = 1f)
-        gy += 100f
-    }
-}
-
-private fun DrawScope.drawContinentTints(project: (Float, Float) -> Offset) {
-    for (cont in MapData.continents) {
-        for (id in cont.territoryIds) {
-            val t = MapData.territory(id)
-            drawPath(buildRegionPath(t, 1.18f, project), Color(cont.colorArgb).copy(alpha = 0.16f))
-        }
+        drawLine(grid, project(0f, gy), project(VW, gy), strokeWidth = 1f); gy += 100f
     }
 }
 
@@ -155,9 +153,8 @@ private fun DrawScope.drawEdges(project: (Float, Float) -> Offset) {
         val tb = MapData.territory(b)
         val isLong = hypot(ta.x - tb.x, ta.y - tb.y) > 320f
         drawLine(
-            color = Color(0xFF6E93BE).copy(alpha = if (isLong) 0.40f else 0.65f),
-            start = project(ta.x, ta.y),
-            end = project(tb.x, tb.y),
+            color = Color(0xFF6E93BE).copy(alpha = if (isLong) 0.38f else 0.6f),
+            start = project(ta.x, ta.y), end = project(tb.x, tb.y),
             strokeWidth = if (isLong) 1.5f else 2f,
             pathEffect = if (isLong) dashed else null
         )
@@ -172,17 +169,17 @@ private fun DrawScope.drawTerritories(
     project: (Float, Float) -> Offset
 ) {
     val namePaint = Paint().apply {
-        color = android.graphics.Color.argb(235, 245, 248, 252)
+        color = android.graphics.Color.argb(240, 246, 249, 253)
         textAlign = Paint.Align.CENTER
         textSize = 10f * s
         typeface = Typeface.create(Typeface.DEFAULT_BOLD, Typeface.BOLD)
         isAntiAlias = true
-        setShadowLayer(3f, 0f, 1f, android.graphics.Color.argb(200, 0, 0, 0))
+        setShadowLayer(3f, 0f, 1f, android.graphics.Color.argb(210, 0, 0, 0))
     }
     val armyPaint = Paint().apply {
         color = android.graphics.Color.WHITE
         textAlign = Paint.Align.CENTER
-        textSize = 13f * s
+        textSize = 12.5f * s
         typeface = Typeface.create(Typeface.DEFAULT_BOLD, Typeface.BOLD)
         isAntiAlias = true
     }
@@ -193,33 +190,139 @@ private fun DrawScope.drawTerritories(
         val ownerColor = if (owner >= 0) Color(engine.players[owner].colorArgb) else Color.Gray
         val isSelected = t.id == selected
         val isTarget = t.id in validTargets
+        val armies = engine.armiesOf[t.id]
 
         val path = buildRegionPath(t, 1f, project)
 
-        drawPath(path, ownerColor.copy(alpha = 0.92f))
-        drawPath(path, Color(0xFF0A1220), style = Stroke(width = 2.2f))
+        // sombra projetada (efeito de relevo elevado)
+        val shadow = buildRegionPath(t, 1f) { x, y -> project(x, y).let { Offset(it.x + 3f, it.y + 4f) } }
+        drawPath(shadow, Color(0x55000000))
+
+        // terreno base + relevo (dentro do contorno)
+        clipPath(path) {
+            drawRect(landColor(t.continentId))
+            // colinas iluminadas
+            for (i in 0 until 5) {
+                val bx = t.x + (hash01(t.id, 100 + i) - 0.5f) * REGION_R * 1.3f
+                val by = t.y + (hash01(t.id, 200 + i) - 0.5f) * REGION_R * 1.1f
+                val br = REGION_R * (0.30f + 0.35f * hash01(t.id, 300 + i)) * s
+                val cc = project(bx, by)
+                drawCircle(
+                    Brush.radialGradient(
+                        listOf(Color(0x3AFFFFFF), Color(0x00FFFFFF)), center = cc, radius = br
+                    ), radius = br, center = cc
+                )
+            }
+            // vales sombreados
+            for (i in 0 until 3) {
+                val bx = t.x + (hash01(t.id, 400 + i) - 0.5f) * REGION_R * 1.2f
+                val by = t.y + (hash01(t.id, 500 + i) - 0.5f) * REGION_R * 1.0f
+                val br = REGION_R * (0.28f + 0.30f * hash01(t.id, 600 + i)) * s
+                val cc = project(bx, by)
+                drawCircle(
+                    Brush.radialGradient(
+                        listOf(Color(0x33000000), Color(0x00000000)), center = cc, radius = br
+                    ), radius = br, center = cc
+                )
+            }
+            // POSSE TRANSLÚCIDA — cor do exército deixando ver o terreno
+            drawRect(ownerColor.copy(alpha = 0.42f))
+        }
+
+        // luz de borda (rim light) + fronteira escura
+        drawPath(path, Color(0x30FFFFFF), style = Stroke(width = 3f))
+        drawPath(path, Color(0xFF0A1220), style = Stroke(width = 2.4f))
         when {
-            isSelected -> drawPath(path, Color(0xFFFFC24B), style = Stroke(width = 4f))
+            isSelected -> drawPath(path, Color(0xFFFFC24B), style = Stroke(width = 4.2f))
             isTarget -> drawPath(path, Color(0xFF7CF5A0), style = Stroke(width = 3.2f))
         }
 
+        // nome do território
         drawContext.canvas.nativeCanvas.drawText(
-            t.name, center.x, center.y - REGION_R * s * 0.55f, namePaint
+            t.name, center.x, center.y - REGION_R * s * 0.72f, namePaint
         )
 
-        val badgeCenter = center.copy(y = center.y + 4f * s)
-        val badgeR = 11f * s
+        // FORTIFICAÇÃO conforme quantidade de exércitos
+        val level = when {
+            armies >= 12 -> 3
+            armies >= 8 -> 2
+            armies >= 4 -> 1
+            else -> 0
+        }
+        if (level > 0) {
+            drawStructure(level, Offset(center.x, center.y - 1f * s), s, ownerColor)
+        }
+
+        // badge com a contagem de exércitos (parte inferior da região)
+        val badgeCenter = Offset(center.x, center.y + REGION_R * s * 0.55f)
+        val badgeR = 10.5f * s
         drawCircle(Color(0xE60A1220), radius = badgeR, center = badgeCenter)
         drawCircle(ownerColor, radius = badgeR, center = badgeCenter, style = Stroke(width = 2f))
         drawContext.canvas.nativeCanvas.drawText(
-            engine.armiesOf[t.id].toString(), badgeCenter.x, badgeCenter.y + 4.6f * s, armyPaint
+            armies.toString(), badgeCenter.x, badgeCenter.y + 4.4f * s, armyPaint
         )
+    }
+}
+
+/** Desenha posto avançado (1), forte (2) ou fortaleza (3). */
+private fun DrawScope.drawStructure(level: Int, c: Offset, u: Float, accent: Color) {
+    val stone = Color(0xFF5A6570)
+    val stoneDark = Color(0xFF333B43)
+
+    fun merlons(x0: Float, top: Float, w: Float, count: Int) {
+        if (count < 1) return
+        val mw = w / (count * 2 - 1)
+        var x = x0
+        repeat(count) {
+            drawRect(stone, topLeft = Offset(x, top - mw), size = Size(mw, mw))
+            x += mw * 2
+        }
+    }
+    fun tower(cx: Float, baseY: Float, w: Float, h: Float) {
+        val top = baseY - h
+        drawRect(stone, topLeft = Offset(cx - w / 2, top), size = Size(w, h))
+        drawRect(stoneDark, topLeft = Offset(cx - w / 2, top), size = Size(w, h), style = Stroke(1.2f))
+        merlons(cx - w / 2, top, w, 3)
+    }
+    fun flag(cx: Float, topY: Float, h: Float) {
+        drawLine(Color(0xFFEFEFEF), Offset(cx, topY), Offset(cx, topY - h), strokeWidth = 1.6f)
+        val fp = Path().apply {
+            moveTo(cx, topY - h)
+            lineTo(cx + h * 0.8f, topY - h + h * 0.30f)
+            lineTo(cx, topY - h + h * 0.58f)
+            close()
+        }
+        drawPath(fp, accent)
+    }
+
+    when (level) {
+        1 -> {
+            tower(c.x, c.y + 6f * u, 8f * u, 12f * u)
+            flag(c.x, c.y + 6f * u - 12f * u, 9f * u)
+        }
+        2 -> {
+            val ww = 18f * u; val wh = 9f * u; val top = c.y + 5f * u - wh
+            drawRect(stone, topLeft = Offset(c.x - ww / 2, top), size = Size(ww, wh))
+            drawRect(stoneDark, topLeft = Offset(c.x - ww / 2, top), size = Size(ww, wh), style = Stroke(1.2f))
+            merlons(c.x - ww / 2, top, ww, 5)
+            tower(c.x + ww / 2 - 3f * u, c.y + 5f * u, 8f * u, 16f * u)
+            flag(c.x + ww / 2 - 3f * u, c.y + 5f * u - 16f * u, 9f * u)
+        }
+        else -> {
+            val ww = 24f * u; val wh = 10f * u; val top = c.y + 5f * u - wh
+            drawRect(stone, topLeft = Offset(c.x - ww / 2, top), size = Size(ww, wh))
+            drawRect(stoneDark, topLeft = Offset(c.x - ww / 2, top), size = Size(ww, wh), style = Stroke(1.2f))
+            merlons(c.x - ww / 2, top, ww, 6)
+            tower(c.x - ww / 2, c.y + 5f * u, 9f * u, 18f * u)
+            tower(c.x + ww / 2, c.y + 5f * u, 9f * u, 18f * u)
+            flag(c.x, c.y + 5f * u - wh, 11f * u)
+        }
     }
 }
 
 private fun DrawScope.drawContinentLabels(s: Float, project: (Float, Float) -> Offset) {
     val paint = Paint().apply {
-        color = android.graphics.Color.argb(120, 220, 232, 245)
+        color = android.graphics.Color.argb(115, 220, 232, 245)
         textAlign = Paint.Align.CENTER
         textSize = 12f * s
         typeface = Typeface.create(Typeface.DEFAULT_BOLD, Typeface.BOLD)
@@ -228,7 +331,7 @@ private fun DrawScope.drawContinentLabels(s: Float, project: (Float, Float) -> O
     for (cont in MapData.continents) {
         val pts = cont.territoryIds.map { MapData.territory(it) }
         val cx = pts.map { it.x }.average().toFloat()
-        val minY = pts.minOf { it.y } - 44f
+        val minY = pts.minOf { it.y } - 46f
         val p = project(cx, minY)
         drawContext.canvas.nativeCanvas.drawText(cont.name.uppercase(), p.x, p.y, paint)
     }
