@@ -198,6 +198,37 @@ fun MenuScreen(vm: GameViewModel) {
 
             Spacer(Modifier.height(28.dp))
 
+            // Partida em andamento salva no aparelho
+            vm.saveInfo?.let { info ->
+                Button(
+                    onClick = { vm.continueGame() },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF2E7D32), contentColor = Color.White
+                    ),
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier.fillMaxWidth().height(60.dp)
+                ) {
+                    Icon(Icons.Filled.PlayArrow, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Column {
+                        Text("CONTINUAR PARTIDA", fontWeight = FontWeight.Black, letterSpacing = 1.sp)
+                        Text(
+                            "${info.territories} territórios • ${info.playersAlive} exércitos em jogo",
+                            fontSize = 11.sp
+                        )
+                    }
+                }
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    "Iniciar uma nova campanha descarta a partida salva.",
+                    color = TextSecondary,
+                    style = MaterialTheme.typography.labelSmall,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(Modifier.height(10.dp))
+            }
+
             Button(
                 onClick = { vm.startGame(name, players, colorIndex) },
                 colors = ButtonDefaults.buttonColors(containerColor = Gold, contentColor = NightNavy),
@@ -208,7 +239,10 @@ fun MenuScreen(vm: GameViewModel) {
             ) {
                 Icon(Icons.Filled.PlayArrow, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
-                Text("INICIAR CAMPANHA", fontWeight = FontWeight.Black, letterSpacing = 1.sp)
+                Text(
+                    if (vm.saveInfo != null) "NOVA CAMPANHA" else "INICIAR CAMPANHA",
+                    fontWeight = FontWeight.Black, letterSpacing = 1.sp
+                )
             }
 
             Spacer(Modifier.height(24.dp))

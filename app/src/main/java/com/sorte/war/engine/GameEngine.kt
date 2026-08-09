@@ -18,7 +18,8 @@ import kotlin.random.Random
  */
 class GameEngine(
     playerConfigs: List<PlayerConfig>,
-    private val rng: Random = Random(System.nanoTime())
+    private val rng: Random = Random(System.nanoTime()),
+    skipSetup: Boolean = false
 ) {
     data class PlayerConfig(val name: String, val color: ArmyColor, val isHuman: Boolean)
 
@@ -63,10 +64,12 @@ class GameEngine(
     val currentPlayer: Player get() = players[currentPlayerIndex]
 
     init {
-        setupBoard()
-        assignObjectives()
-        buildCardDeck()
-        startTurn()
+        if (!skipSetup) {
+            setupBoard()
+            assignObjectives()
+            buildCardDeck()
+            startTurn()
+        }
     }
 
     // ---------------------------------------------------------------------
@@ -400,6 +403,165 @@ class GameEngine(
                 winnerId = p.id
                 phase = Phase.FIM_DE_JOGO
                 return
+            }
+        }
+    }
+
+    // ---------------------------------------------------------------------
+    // SALVAR / CARREGAR PARTIDA
+    // ---------------------------------------------------------------------
+
+    /** Serializa a partida inteira num texto (formato próprio, sem dependências). */
+    fun toSave(): String {
+        val sb = StringBuilder()
+        fun line(k: String, v: String) { sb.append(k).append('=').append(v).append('\n') }
+
+        line("v", SAVE_VERSION.toString())
+        line("cur", currentPlayerIndex.toString())
+        line("phase", phase.name)
+        line("reinf", reinforcements.toString())
+        line("winner", (winnerId ?: -1).toString())
+        line("conq", if (conqueredThisTurn) "1" else "0")
+        line("fort", if (fortifyUsed) "1" else "0")
+        line("sets", setsTraded.toString())
+        line("owner", ownerOf.joinToString(","))
+        line("armies", armiesOf.joinToString(","))
+        line("elimBy", eliminatedBy.joinToString(","))
+        line("draw", drawPile.joinToString(";") { cardToText(it) })
+        line("discard", discardPile.joinToString(";") { cardToText(it) })
+        line("np", players.size.toString())
+        players.forEach { p ->
+            val fields = listOf(
+                p.id.toString(),
+                p.name,
+                p.colorArgb.toString(),
+                if (p.isHuman) "1" else "0",
+                if (p.eliminated) "1" else "0",
+                p.cards.joinToString(";") { cardToText(it) },
+                objectiveToText(p.objective)
+            )
+            line("p", fields.joinToString(FS))
+        }
+        return sb.toString()
+    }
+
+    companion object {
+        const val SAVE_VERSION = 1
+        private const val FS = "\u0001" // separador de campos
+        private const val GS = "\u0002" // separador de grupos
+
+        private fun cardToText(c: Card): String = "${c.symbol.ordinal}:${c.territoryId}"
+
+        private fun cardFromText(s: String): Card? {
+            val p = s.split(":")
+            if (p.size != 2) return null
+            val sym = CardSymbol.entries.getOrNull(p[0].toIntOrNull() ?: return null) ?: return null
+            return Card(sym, p[1].toIntOrNull() ?: return null)
+        }
+
+        private fun cardsFromText(s: String): MutableList<Card> =
+            if (s.isBlank()) mutableListOf()
+            else s.split(";").mapNotNull { cardFromText(it) }.toMutableList()
+
+        private fun objectiveToText(o: Objective?): String = when (o) {
+            null -> ""
+            is Objective.ConquerContinents ->
+                listOf("C", o.continentIds.joinToString("-"), o.extraAny.toString(), o.description)
+                    .joinToString(GS)
+            is Objective.ConquerTerritories ->
+                listOf("T", o.count.toString(), o.minArmiesEach.toString(), o.description)
+                    .joinToString(GS)
+            is Objective.DestroyPlayer ->
+                listOf("D", o.targetColorArgb.toString(), o.targetColorName, o.description)
+                    .joinToString(GS)
+        }
+
+        private fun objectiveFromText(s: String): Objective? {
+            if (s.isBlank()) return null
+            val p = s.split(GS)
+            if (p.size < 4) return null
+            return when (p[0]) {
+                "C" -> Objective.ConquerContinents(
+                    continentIds = p[1].split("-").mapNotNull { it.toIntOrNull() },
+                    extraAny = p[2].toIntOrNull() ?: 0,
+                    desc = p[3]
+                )
+                "T" -> Objective.ConquerTerritories(
+                    count = p[1].toIntOrNull() ?: 24,
+                    minArmiesEach = p[2].toIntOrNull() ?: 1,
+                    desc = p[3]
+                )
+                "D" -> Objective.DestroyPlayer(
+                    targetColorArgb = p[1].toLongOrNull() ?: 0L,
+                    targetColorName = p[2],
+                    desc = p[3]
+                )
+                else -> null
+            }
+        }
+
+        /** Recria a partida a partir do texto gerado por [toSave]; null se inválido. */
+        fun fromSave(text: String): GameEngine? {
+            try {
+                val map = HashMap<String, MutableList<String>>()
+                text.lineSequence().forEach { ln ->
+                    val i = ln.indexOf('=')
+                    if (i > 0) map.getOrPut(ln.substring(0, i)) { mutableListOf() }
+                        .add(ln.substring(i + 1))
+                }
+                fun one(k: String): String? = map[k]?.firstOrNull()
+                if ((one("v")?.toIntOrNull() ?: 0) != SAVE_VERSION) return null
+
+                val rows = map["p"] ?: return null
+                if (rows.isEmpty()) return null
+
+                val parsed = rows.map { it.split(FS) }
+                if (parsed.any { it.size < 7 }) return null
+
+                val configs = parsed.map {
+                    PlayerConfig(
+                        name = it[1],
+                        color = ArmyColor(it[1], it[2].toLong()),
+                        isHuman = it[3] == "1"
+                    )
+                }
+                val e = GameEngine(configs, skipSetup = true)
+
+                parsed.forEachIndexed { idx, f ->
+                    val p = e.players[idx]
+                    p.eliminated = f[4] == "1"
+                    p.cards.clear()
+                    p.cards.addAll(cardsFromText(f[5]))
+                    p.objective = objectiveFromText(f[6])
+                }
+
+                fun ints(k: String): List<Int> =
+                    one(k)?.split(",")?.mapNotNull { it.trim().toIntOrNull() } ?: emptyList()
+
+                val owner = ints("owner")
+                val armies = ints("armies")
+                if (owner.size != e.ownerOf.size || armies.size != e.armiesOf.size) return null
+                for (i in owner.indices) { e.ownerOf[i] = owner[i]; e.armiesOf[i] = armies[i] }
+
+                val elim = ints("elimBy")
+                for (i in elim.indices) if (i < e.eliminatedBy.size) e.eliminatedBy[i] = elim[i]
+
+                e.currentPlayerIndex = one("cur")?.toIntOrNull() ?: 0
+                e.phase = Phase.valueOf(one("phase") ?: Phase.REFORCO.name)
+                e.reinforcements = one("reinf")?.toIntOrNull() ?: 0
+                e.winnerId = one("winner")?.toIntOrNull()?.takeIf { it >= 0 }
+                e.conqueredThisTurn = one("conq") == "1"
+                e.fortifyUsed = one("fort") == "1"
+                e.setsTraded = one("sets")?.toIntOrNull() ?: 0
+
+                e.drawPile.clear()
+                e.drawPile.addAll(cardsFromText(one("draw") ?: ""))
+                e.discardPile.clear()
+                e.discardPile.addAll(cardsFromText(one("discard") ?: ""))
+
+                return e
+            } catch (t: Throwable) {
+                return null
             }
         }
     }

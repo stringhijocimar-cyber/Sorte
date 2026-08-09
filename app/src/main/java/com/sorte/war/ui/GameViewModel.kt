@@ -7,6 +7,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.sorte.war.data.GameStorage
+import com.sorte.war.data.SaveInfo
 import com.sorte.war.engine.Ai
 import com.sorte.war.engine.GameEngine
 import com.sorte.war.model.BattleResult
@@ -29,6 +31,11 @@ data class CommanderReport(
 class GameViewModel(app: Application) : AndroidViewModel(app) {
 
     val sound: SoundManager by lazy { SoundManager(getApplication<Application>()) }
+    private val storage = GameStorage(getApplication<Application>())
+
+    /** Resumo da partida salva (null se não houver). */
+    var saveInfo by mutableStateOf<SaveInfo?>(storage.info())
+        private set
 
     var screen by mutableStateOf(Screen.MENU)
         private set
@@ -101,10 +108,50 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         statusMessage = "Sua vez, Comandante — distribua seus reforços."
         screen = Screen.GAME
         sound.play(Sfx.CLICK)
+        persist()
+        bump()
+    }
+
+    /** Retoma a partida salva no aparelho. */
+    fun continueGame() {
+        val e = storage.load()
+        if (e == null) {
+            saveInfo = null
+            statusMessage = "Não foi possível recuperar a partida salva."
+            bump(); return
+        }
+        engine = e
+        selectedTerritory = null
+        battleDialog = null
+        showAdvanceDialog = false
+        fortifyTarget = null
+        commanderReport = null
+        endSoundPlayed = false
+        humanTerritoriesBeforeAi = emptySet()
+        statusMessage = if (e.currentPlayer.isHuman)
+            "Partida retomada, Comandante." else "Retomando..."
+        screen = Screen.GAME
+        sound.play(Sfx.CLICK)
+        bump()
+        // se a vez era da CPU, ela continua de onde parou
+        if (!e.currentPlayer.isHuman && e.winnerId == null) startAiRound()
+    }
+
+    /** Grava o estado atual (chamado após cada ação relevante). */
+    private fun persist() {
+        val e = engine ?: return
+        storage.save(e)
+        saveInfo = storage.info()
+    }
+
+    fun deleteSave() {
+        storage.clear()
+        saveInfo = null
         bump()
     }
 
     fun backToMenu() {
+        persist()          // guarda a partida em andamento antes de sair
         engine = null
         screen = Screen.MENU
         bump()
@@ -195,12 +242,17 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     fun dismissBattle() {
         val e = engine
         battleDialog = null
-        if (e?.pendingAdvance != null) showAdvanceDialog = true
+        if (e?.pendingAdvance != null) showAdvanceDialog = true else persist()
         bump()
     }
 
-    fun confirmAdvance(extra: Int) { engine?.advanceMore(extra); showAdvanceDialog = false; bump() }
-    fun cancelAdvance() { engine?.clearPendingAdvance(); showAdvanceDialog = false; bump() }
+    fun confirmAdvance(extra: Int) {
+        engine?.advanceMore(extra); showAdvanceDialog = false; persist(); bump()
+    }
+
+    fun cancelAdvance() {
+        engine?.clearPendingAdvance(); showAdvanceDialog = false; persist(); bump()
+    }
 
     fun confirmFortify(count: Int) {
         val e = engine ?: return
@@ -212,6 +264,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         }
         fortifyTarget = null
         selectedTerritory = null
+        persist()
         bump()
     }
 
@@ -223,6 +276,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         if (gained > 0) {
             sound.play(Sfx.CONQUER, 0.7f)
             statusMessage = "Você trocou cartas e recrutou $gained exércitos!"
+            persist()
         }
         bump()
     }
@@ -248,6 +302,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
             Phase.DESLOCAMENTO -> "Fase de deslocamento — mova tropas (opcional)."
             else -> statusMessage
         }
+        persist()
         bump()
         if (wasDeslocamento) startAiRound()
     }
@@ -284,6 +339,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
             aiThinking = false
             checkEndSound()
             buildCommanderReport()
+            persist()
             bump()
         }
     }

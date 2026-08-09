@@ -198,7 +198,26 @@ private fun DrawScope.drawLandmasses(
                 center = Offset(center.x + 16f * s, center.y + 18f * s)
             )
             // cor do exército — translúcida, deixando ver o mapa
-            drawRect(ownerColor.copy(alpha = 0.78f))
+            drawRect(ownerColor.copy(alpha = 0.74f))
+
+            // fronteiras internas dos países que compõem o território
+            val subs = MapData.subShapesOf(t.id)
+            if (subs.isNotEmpty()) {
+                val sub = Path()
+                for (ring in subs) {
+                    if (ring.size < 6) continue
+                    val q0 = project(ring[0], ring[1])
+                    sub.moveTo(q0.x, q0.y)
+                    var i = 2
+                    while (i < ring.size) {
+                        val q = project(ring[i], ring[i + 1])
+                        sub.lineTo(q.x, q.y)
+                        i += 2
+                    }
+                    sub.close()
+                }
+                drawPath(sub, Color(0x33000000), style = Stroke(width = 0.9f))
+            }
         }
 
         // fronteiras
