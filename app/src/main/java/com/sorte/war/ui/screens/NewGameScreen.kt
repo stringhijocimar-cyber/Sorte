@@ -51,6 +51,10 @@ import com.sorte.war.ui.Screen
 import com.sorte.war.ui.components.AvatarPortrait
 import com.sorte.war.ui.theme.Gold
 import com.sorte.war.ui.theme.NightNavy
+import com.sorte.war.ui.theme.PanelNavy
+import com.sorte.war.ui.theme.PanelNavyLight
+import com.sorte.war.ui.theme.SurfaceHigh
+import com.sorte.war.ui.theme.TacticalStroke
 import com.sorte.war.ui.theme.TextSecondary
 
 @Composable
@@ -68,7 +72,7 @@ fun NewGameScreen(vm: GameViewModel) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Brush.verticalGradient(listOf(Color(0xFF0D2A47), Color(0xFF060C15))))
+            .background(Brush.verticalGradient(listOf(Color(0xFF0A1D27), Color(0xFF07111A), NightNavy)))
             .systemBarsPadding()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 20.dp, vertical = 16.dp)
@@ -77,7 +81,7 @@ fun NewGameScreen(vm: GameViewModel) {
             Box(
                 modifier = Modifier
                     .clip(CircleShape)
-                    .background(Color(0x22FFFFFF))
+                    .background(Color(0x14FFFFFF))
                     .clickableNoRipple { vm.goTo(Screen.HOME) }
                     .padding(8.dp)
             ) {
@@ -177,7 +181,7 @@ fun NewGameScreen(vm: GameViewModel) {
                         modifier = Modifier
                             .size(46.dp)
                             .clip(CircleShape)
-                            .background(if (sel) Gold else Color(0xFF22344D))
+                            .background(if (sel) Gold else SurfaceHigh)
                             .clickableNoRipple { players = count },
                         contentAlignment = Alignment.Center
                     ) {
@@ -207,10 +211,10 @@ fun NewGameScreen(vm: GameViewModel) {
                         .fillMaxWidth()
                         .padding(vertical = 3.dp)
                         .clip(RoundedCornerShape(12.dp))
-                        .background(if (sel) Gold.copy(alpha = 0.18f) else Color(0xFF1B2C44))
+                        .background(if (sel) Gold.copy(alpha = 0.18f) else PanelNavyLight)
                         .border(
                             if (sel) 2.dp else 1.dp,
-                            if (sel) Gold else Color(0xFF2A3B54),
+                            if (sel) Gold else TacticalStroke,
                             RoundedCornerShape(12.dp)
                         )
                         .clickableNoRipple { difficulty = d }
@@ -244,10 +248,10 @@ fun NewGameScreen(vm: GameViewModel) {
                         .fillMaxWidth()
                         .padding(vertical = 3.dp)
                         .clip(RoundedCornerShape(12.dp))
-                        .background(if (sel) Gold.copy(alpha = 0.18f) else Color(0xFF1B2C44))
+                        .background(if (sel) Gold.copy(alpha = 0.18f) else PanelNavyLight)
                         .border(
                             if (sel) 2.dp else 1.dp,
-                            if (sel) Gold else Color(0xFF2A3B54),
+                            if (sel) Gold else TacticalStroke,
                             RoundedCornerShape(12.dp)
                         )
                         .clickableNoRipple { setupMode = m }
@@ -278,7 +282,7 @@ fun NewGameScreen(vm: GameViewModel) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(12.dp))
-                    .background(Color(0xFF1B2C44))
+                    .background(PanelNavyLight)
                     .clickableNoRipple { pickObjective = !pickObjective }
                     .padding(horizontal = 12.dp, vertical = 10.dp)
             ) {
@@ -298,7 +302,7 @@ fun NewGameScreen(vm: GameViewModel) {
                     modifier = Modifier
                         .size(46.dp, 26.dp)
                         .clip(RoundedCornerShape(13.dp))
-                        .background(if (pickObjective) Gold else Color(0xFF3A4C66)),
+                        .background(if (pickObjective) Gold else SurfaceHigh),
                     contentAlignment = if (pickObjective) Alignment.CenterEnd else Alignment.CenterStart
                 ) {
                     Box(
@@ -356,7 +360,7 @@ private fun SetupCard(title: String, content: @Composable () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(18.dp))
-            .background(Color(0xFF132033))
+            .background(PanelNavy)
             .padding(16.dp)
     ) {
         Text(title, style = MaterialTheme.typography.labelLarge, color = TextSecondary)

@@ -67,7 +67,7 @@ fun MapCanvas(
     Canvas(
         modifier = modifier
             .fillMaxSize()
-            .background(Brush.verticalGradient(listOf(Color(0xFF0C2947), Color(0xFF061019))))
+            .background(Brush.verticalGradient(listOf(Color(0xFF092631), Color(0xFF06131B), Color(0xFF04090E))))
             .pointerInput(Unit) {
                 detectTransformGestures { _, pan, zoom, _ ->
                     userScale = (userScale * zoom).coerceIn(1f, 6f)
@@ -133,7 +133,7 @@ private fun DrawScope.drawWatermark(size: Size) {
     val cx = size.width * 0.5f
     val cy = size.height * 0.52f
     val r = minOf(size.width, size.height) * 0.30f
-    val ink = Color(0xFF9FD4FF).copy(alpha = 0.055f)
+    val ink = Color(0xFF6CB7B3).copy(alpha = 0.045f)
 
     // espadas cruzadas
     val len = r * 1.35f
@@ -154,7 +154,7 @@ private fun DrawScope.drawWatermark(size: Size) {
 }
 
 private fun DrawScope.drawOceanGrid(project: (Float, Float) -> Offset) {
-    val grid = Color(0x18AEDCFF)
+    val grid = Color(0x126CB7B3)
     var gx = 0f
     while (gx <= VW) {
         drawLine(grid, project(gx, 0f), project(gx, VH), strokeWidth = 1f); gx += 50f
@@ -172,7 +172,7 @@ private fun DrawScope.drawRoutes(project: (Float, Float) -> Offset) {
         val tb = MapData.territory(b)
         val far = hypot(ta.x - tb.x, ta.y - tb.y) > 150f
         drawLine(
-            color = Color(0xFF8FC3EE).copy(alpha = if (far) 0.42f else 0.20f),
+            color = Color(0xFF82B8C7).copy(alpha = if (far) 0.34f else 0.14f),
             start = project(ta.x, ta.y),
             end = project(tb.x, tb.y),
             strokeWidth = if (far) 1.6f else 1.2f,
@@ -227,7 +227,7 @@ private fun DrawScope.drawLandmasses(
                 center = Offset(center.x + 16f * s, center.y + 18f * s)
             )
             // cor do exército — translúcida, deixando ver o mapa
-            drawRect(ownerColor.copy(alpha = 0.74f))
+            drawRect(ownerColor.copy(alpha = 0.68f))
 
             // fronteiras internas dos países que compõem o território
             val subs = MapData.subShapesOf(t.id)
@@ -250,15 +250,15 @@ private fun DrawScope.drawLandmasses(
         }
 
         // fronteiras
-        drawPath(path, Color(0xFF07121F), style = Stroke(width = 1.6f))
+        drawPath(path, Color(0xFF050B10), style = Stroke(width = 1.75f))
         when {
             t.id == selected -> {
-                drawPath(path, Color(0x66FFD98A), style = Stroke(width = 6f))
-                drawPath(path, Color(0xFFFFC24B), style = Stroke(width = 2.4f))
+                drawPath(path, Color(0x55E8B85A), style = Stroke(width = 7f))
+                drawPath(path, Color(0xFFE8B85A), style = Stroke(width = 2.6f))
             }
             t.id in validTargets -> {
-                drawPath(path, Color(0x557CF5A0), style = Stroke(width = 5f))
-                drawPath(path, Color(0xFF7CF5A0), style = Stroke(width = 2f))
+                drawPath(path, Color(0x4458B77B), style = Stroke(width = 6f))
+                drawPath(path, Color(0xFF58B77B), style = Stroke(width = 2.2f))
             }
         }
     }
@@ -310,8 +310,8 @@ private fun DrawScope.drawLabels(
 
         drawContext.canvas.nativeCanvas.drawText(t.name, c.x, c.y - 15f * s, namePaint)
 
-        val badgeR = 9.5f * s
-        drawCircle(Color(0xF0060F1B), radius = badgeR, center = c)
+        val badgeR = 10f * s
+        drawCircle(Color(0xF2050A0F), radius = badgeR, center = c)
         drawCircle(ownerColor, radius = badgeR, center = c, style = Stroke(width = 2f))
         drawContext.canvas.nativeCanvas.drawText(armies.toString(), c.x, c.y + 4.2f * s, armyPaint)
     }

@@ -42,6 +42,10 @@ import com.sorte.war.ui.GameViewModel
 import com.sorte.war.ui.Screen
 import com.sorte.war.ui.components.AvatarPortrait
 import com.sorte.war.ui.theme.Gold
+import com.sorte.war.ui.theme.NightNavy
+import com.sorte.war.ui.theme.PanelNavy
+import com.sorte.war.ui.theme.PanelNavyLight
+import com.sorte.war.ui.theme.SurfaceHigh
 import com.sorte.war.ui.theme.TextSecondary
 
 @Composable
@@ -54,7 +58,7 @@ fun StatsScreen(vm: GameViewModel) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Brush.verticalGradient(listOf(Color(0xFF0D2A47), Color(0xFF060C15))))
+            .background(Brush.verticalGradient(listOf(Color(0xFF0A1D27), Color(0xFF07111A), NightNavy)))
             .systemBarsPadding()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 20.dp, vertical = 16.dp)
@@ -84,7 +88,7 @@ fun StatsScreen(vm: GameViewModel) {
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(20.dp))
-                .background(Color(0xFF16263C))
+                .background(PanelNavyLight)
                 .padding(16.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -109,7 +113,7 @@ fun StatsScreen(vm: GameViewModel) {
                 LinearProgressIndicator(
                     progress = { s.rankProgress },
                     color = Gold,
-                    trackColor = Color(0xFF243B55),
+                    trackColor = SurfaceHigh,
                     modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp))
                 )
             } else {
@@ -150,7 +154,7 @@ fun StatsScreen(vm: GameViewModel) {
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(16.dp))
-                .background(Color(0xFF132033))
+                .background(PanelNavy)
                 .padding(vertical = 6.dp)
         ) {
             Rank.entries.forEach { r ->
@@ -165,7 +169,7 @@ fun StatsScreen(vm: GameViewModel) {
                 ) {
                     Text(
                         r.insignia,
-                        color = if (reached) Gold else Color(0xFF41526B),
+                        color = if (reached) Gold else Color(0xFF536273),
                         fontWeight = FontWeight.Black,
                         modifier = Modifier.width(52.dp)
                     )
@@ -189,7 +193,7 @@ fun StatsScreen(vm: GameViewModel) {
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(14.dp))
-                .background(if (confirmReset) Color(0xFF8E2A2A) else Color(0xFF22344D))
+                .background(if (confirmReset) Color(0xFF7D3030) else SurfaceHigh)
                 .clickableNoRipple {
                     if (confirmReset) { vm.resetStats(); confirmReset = false }
                     else confirmReset = true
@@ -218,7 +222,7 @@ private fun StatTile(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = modifier
             .clip(RoundedCornerShape(14.dp))
-            .background(Color(0xFF132033))
+            .background(PanelNavy)
             .padding(vertical = 14.dp, horizontal = 6.dp)
     ) {
         Text(value, color = valueColor, fontSize = 20.sp, fontWeight = FontWeight.Black)

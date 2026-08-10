@@ -35,6 +35,8 @@ import com.sorte.war.model.MapData
 import com.sorte.war.ui.GameViewModel
 import com.sorte.war.ui.Screen
 import com.sorte.war.ui.theme.Gold
+import com.sorte.war.ui.theme.NightNavy
+import com.sorte.war.ui.theme.PanelNavy
 import com.sorte.war.ui.theme.TextSecondary
 
 @Composable
@@ -44,7 +46,7 @@ fun HowToPlayScreen(vm: GameViewModel) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Brush.verticalGradient(listOf(Color(0xFF0D2A47), Color(0xFF060C15))))
+            .background(Brush.verticalGradient(listOf(Color(0xFF0A1D27), Color(0xFF07111A), NightNavy)))
             .systemBarsPadding()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 20.dp, vertical = 16.dp)
@@ -109,7 +111,7 @@ fun HowToPlayScreen(vm: GameViewModel) {
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(16.dp))
-                .background(Color(0xFF132033))
+                .background(PanelNavy)
                 .padding(vertical = 6.dp)
         ) {
             MapData.continents.forEach { c ->
@@ -153,7 +155,7 @@ private fun Step(number: String, title: String, body: String) {
                 .background(Gold),
             contentAlignment = Alignment.Center
         ) {
-            Text(number, color = Color(0xFF0B1220), fontWeight = FontWeight.Black)
+            Text(number, color = NightNavy, fontWeight = FontWeight.Black)
         }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {

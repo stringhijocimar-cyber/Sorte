@@ -21,3 +21,6 @@ app/build/
 # Logs / OS
 *.log
 .DS_Store
+
+# Backup gerado pelo script de redesign de UI
+.premium-ui-backup/
