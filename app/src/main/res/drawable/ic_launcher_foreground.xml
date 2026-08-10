@@ -1,102 +1,168 @@
 <?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
 
     <!--
-      Área segura do ícone adaptativo: círculo de raio ~36 no centro (54,54).
-      Tudo abaixo fica dentro dela para não ser cortado por nenhum launcher.
+      Emblema central. Tudo dentro do círculo de raio 36 em (54,54), que é a
+      área garantida do ícone adaptativo — nenhum launcher corta.
     -->
 
-    <!-- Espadas cruzadas (atrás do globo), com pontas para cima -->
-    <path
-        android:pathData="M30,78 L78,30"
-        android:strokeColor="#D9E2EC"
-        android:strokeWidth="7"
-        android:strokeLineCap="round" />
-    <path
-        android:pathData="M78,78 L30,30"
-        android:strokeColor="#D9E2EC"
-        android:strokeWidth="7"
-        android:strokeLineCap="round" />
-    <!-- brilho central das lâminas -->
-    <path
-        android:pathData="M32,76 L76,32"
-        android:strokeColor="#FAFCFE"
-        android:strokeWidth="2.2"
-        android:strokeLineCap="round" />
-    <path
-        android:pathData="M76,76 L32,32"
-        android:strokeColor="#FAFCFE"
-        android:strokeWidth="2.2"
-        android:strokeLineCap="round" />
+    <!-- ============ ASAS DOURADAS ATRÁS DO ESCUDO ============ -->
+    <!-- asa esquerda: três penas -->
+    <path android:pathData="M50,58 Q34,50 22,54 Q32,60 48,62 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear" android:startX="22" android:startY="54"
+                android:endX="50" android:endY="62">
+                <item android:offset="0" android:color="#FFB8862B" />
+                <item android:offset="0.5" android:color="#FFF3D06A" />
+                <item android:offset="1" android:color="#FFC9962F" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <path android:pathData="M50,64 Q35,58 24,63 Q34,68 48,68 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear" android:startX="24" android:startY="63"
+                android:endX="50" android:endY="68">
+                <item android:offset="0" android:color="#FFA9781F" />
+                <item android:offset="0.5" android:color="#FFE8C25C" />
+                <item android:offset="1" android:color="#FFBB8A2A" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <!-- asa direita -->
+    <path android:pathData="M58,58 Q74,50 86,54 Q76,60 60,62 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear" android:startX="86" android:startY="54"
+                android:endX="58" android:endY="62">
+                <item android:offset="0" android:color="#FFB8862B" />
+                <item android:offset="0.5" android:color="#FFF3D06A" />
+                <item android:offset="1" android:color="#FFC9962F" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <path android:pathData="M58,64 Q73,58 84,63 Q74,68 60,68 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear" android:startX="84" android:startY="63"
+                android:endX="58" android:endY="68">
+                <item android:offset="0" android:color="#FFA9781F" />
+                <item android:offset="0.5" android:color="#FFE8C25C" />
+                <item android:offset="1" android:color="#FFBB8A2A" />
+            </gradient>
+        </aapt:attr>
+    </path>
 
-    <!-- Cabos (abaixo das guardas), para as pontas não parecerem lâmina solta -->
-    <path
-        android:pathData="M30,78 L35,73"
-        android:strokeColor="#6E4A2B"
-        android:strokeWidth="6.5"
-        android:strokeLineCap="round" />
-    <path
-        android:pathData="M78,78 L73,73"
-        android:strokeColor="#6E4A2B"
-        android:strokeWidth="6.5"
-        android:strokeLineCap="round" />
+    <!-- ============ ESCUDO ============ -->
+    <!-- sombra do escudo -->
+    <path android:fillColor="#000000" android:fillAlpha="0.35"
+        android:pathData="M54,45 L71,50 Q71,68 54,82 Q37,68 37,50 Z" />
+    <!-- borda dourada -->
+    <path android:pathData="M54,43 L72,48.5 Q72,68 54,82.5 Q36,68 36,48.5 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear" android:startX="36" android:startY="43"
+                android:endX="72" android:endY="82">
+                <item android:offset="0" android:color="#FFFCE79A" />
+                <item android:offset="0.35" android:color="#FFD9A63A" />
+                <item android:offset="0.7" android:color="#FFB07F22" />
+                <item android:offset="1" android:color="#FFEBC964" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <!-- campo interno azul -->
+    <path android:pathData="M54,47 L68,51.5 Q68,66.5 54,78.5 Q40,66.5 40,51.5 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear" android:startX="42" android:startY="48"
+                android:endX="66" android:endY="78">
+                <item android:offset="0" android:color="#FF2C6FB0" />
+                <item android:offset="0.55" android:color="#FF17497C" />
+                <item android:offset="1" android:color="#FF0B2B4E" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <!-- brilho no canto superior esquerdo do campo -->
+    <path android:fillColor="#FFFFFF" android:fillAlpha="0.16"
+        android:pathData="M54,47 L54,63 L41,53 L40,51.5 Z" />
 
-    <!-- Guardas douradas, junto aos punhos (parte de baixo) -->
-    <path
-        android:pathData="M28,68 L40,80"
-        android:strokeColor="#E8B23C"
-        android:strokeWidth="5.5"
-        android:strokeLineCap="round" />
-    <path
-        android:pathData="M80,68 L68,80"
-        android:strokeColor="#E8B23C"
-        android:strokeWidth="5.5"
-        android:strokeLineCap="round" />
+    <!-- ============ ESPADAS CRUZADAS NO ESCUDO ============ -->
+    <!-- lâminas -->
+    <path android:pathData="M46,72 L62,52" android:strokeColor="#FFF0D07A"
+        android:strokeWidth="3.4" android:strokeLineCap="round" />
+    <path android:pathData="M62,72 L46,52" android:strokeColor="#FFF0D07A"
+        android:strokeWidth="3.4" android:strokeLineCap="round" />
+    <!-- brilho das lâminas -->
+    <path android:pathData="M47,71 L61,53.5" android:strokeColor="#FFFFF4CB"
+        android:strokeWidth="1.1" android:strokeLineCap="round" />
+    <path android:pathData="M61,71 L47,53.5" android:strokeColor="#FFFFF4CB"
+        android:strokeWidth="1.1" android:strokeLineCap="round" />
+    <!-- guardas -->
+    <path android:pathData="M43,66 L50,73" android:strokeColor="#FFD9A63A"
+        android:strokeWidth="2.6" android:strokeLineCap="round" />
+    <path android:pathData="M65,66 L58,73" android:strokeColor="#FFD9A63A"
+        android:strokeWidth="2.6" android:strokeLineCap="round" />
+    <!-- pomos -->
+    <path android:fillColor="#FFF3D06A"
+        android:pathData="M45.5,74.5 m-1.7,0 a1.7,1.7 0 1,0 3.4,0 a1.7,1.7 0 1,0 -3.4,0" />
+    <path android:fillColor="#FFF3D06A"
+        android:pathData="M62.5,74.5 m-1.7,0 a1.7,1.7 0 1,0 3.4,0 a1.7,1.7 0 1,0 -3.4,0" />
 
-    <!-- Globo -->
-    <path
-        android:fillColor="#1573B8"
-        android:pathData="M54,54 m-20,0 a20,20 0 1,0 40,0 a20,20 0 1,0 -40,0" />
+    <!-- ============ DADOS ============ -->
+    <!-- dado vermelho -->
+    <path android:pathData="M24,72 h13 v13 h-13 z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear" android:startX="24" android:startY="72"
+                android:endX="37" android:endY="85">
+                <item android:offset="0" android:color="#FFF06A62" />
+                <item android:offset="0.55" android:color="#FFD5342C" />
+                <item android:offset="1" android:color="#FF9B1F19" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <path android:strokeColor="#FF7A1611" android:strokeWidth="0.9"
+        android:pathData="M24,72 h13 v13 h-13 z" />
+    <path android:fillColor="#FFFFFFFF"
+        android:pathData="M27.4,75.4 m-1.3,0 a1.3,1.3 0 1,0 2.6,0 a1.3,1.3 0 1,0 -2.6,0" />
+    <path android:fillColor="#FFFFFFFF"
+        android:pathData="M33.6,81.6 m-1.3,0 a1.3,1.3 0 1,0 2.6,0 a1.3,1.3 0 1,0 -2.6,0" />
+    <path android:fillColor="#FFFFFFFF"
+        android:pathData="M30.5,78.5 m-1.3,0 a1.3,1.3 0 1,0 2.6,0 a1.3,1.3 0 1,0 -2.6,0" />
 
-    <!-- Continentes -->
-    <path
-        android:fillColor="#3FB367"
-        android:pathData="M40,44 Q47,39 53,43 Q55,49 50,53 Q42,55 39,50 Z" />
-    <path
-        android:fillColor="#3FB367"
-        android:pathData="M47,59 Q53,58 56,63 Q55,69 50,71 Q46,66 46,62 Z" />
-    <path
-        android:fillColor="#3FB367"
-        android:pathData="M59,41 Q69,42 72,49 Q69,55 62,54 Q57,50 57,46 Z" />
-    <path
-        android:fillColor="#3FB367"
-        android:pathData="M62,60 Q69,60 71,65 Q68,70 63,69 Q60,64 60,62 Z" />
+    <!-- dado azul -->
+    <path android:pathData="M36,79 h11 v11 h-11 z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear" android:startX="36" android:startY="79"
+                android:endX="47" android:endY="90">
+                <item android:offset="0" android:color="#FF6FB6EE" />
+                <item android:offset="0.55" android:color="#FF2A7CC4" />
+                <item android:offset="1" android:color="#FF16497A" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <path android:strokeColor="#FF10375C" android:strokeWidth="0.9"
+        android:pathData="M36,79 h11 v11 h-11 z" />
+    <path android:fillColor="#FFFFFFFF"
+        android:pathData="M39,82 m-1.2,0 a1.2,1.2 0 1,0 2.4,0 a1.2,1.2 0 1,0 -2.4,0" />
+    <path android:fillColor="#FFFFFFFF"
+        android:pathData="M44,87 m-1.2,0 a1.2,1.2 0 1,0 2.4,0 a1.2,1.2 0 1,0 -2.4,0" />
+    <path android:fillColor="#FFFFFFFF"
+        android:pathData="M44,82 m-1.2,0 a1.2,1.2 0 1,0 2.4,0 a1.2,1.2 0 1,0 -2.4,0" />
+    <path android:fillColor="#FFFFFFFF"
+        android:pathData="M39,87 m-1.2,0 a1.2,1.2 0 1,0 2.4,0 a1.2,1.2 0 1,0 -2.4,0" />
 
-    <!-- Meridiano e equador -->
-    <path
-        android:pathData="M54,34 A13.5,20 0 0,1 54,74 A13.5,20 0 0,1 54,34"
-        android:strokeColor="#BFE4FF"
-        android:strokeWidth="1.5"
-        android:strokeAlpha="0.55" />
-    <path
-        android:pathData="M34,54 L74,54"
-        android:strokeColor="#BFE4FF"
-        android:strokeWidth="1.5"
-        android:strokeAlpha="0.55" />
-
-    <!-- Brilho superior do globo -->
-    <path
-        android:fillColor="#FFFFFF"
-        android:fillAlpha="0.20"
-        android:pathData="M54,54 m-20,0 a20,20 0 0,1 20,-20 a20,20 0 0,0 -15,20 Z" />
-
-    <!-- Aro dourado -->
-    <path
-        android:pathData="M54,54 m-20,0 a20,20 0 1,0 40,0 a20,20 0 1,0 -40,0"
-        android:strokeColor="#F0BC49"
-        android:strokeWidth="3.5" />
+    <!-- ============ BANDEIRA DE CONQUISTA (direita) ============ -->
+    <path android:strokeColor="#FFDDE4EC" android:strokeWidth="1.6" android:strokeLineCap="round"
+        android:pathData="M72,88 L72,68" />
+    <path android:pathData="M72,68 L86,72 L72,77 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear" android:startX="72" android:startY="68"
+                android:endX="86" android:endY="77">
+                <item android:offset="0" android:color="#FFE8544C" />
+                <item android:offset="1" android:color="#FFA82019" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <path android:fillColor="#FFF3D06A"
+        android:pathData="M72,67 m-1.6,0 a1.6,1.6 0 1,0 3.2,0 a1.6,1.6 0 1,0 -3.2,0" />
 </vector>
