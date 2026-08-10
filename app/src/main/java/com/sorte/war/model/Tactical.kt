@@ -193,27 +193,77 @@ enum class TacticalCard(
 }
 
 /**
- * Medalhas táticas — as cartas 15 a 21 do baralho ilustrado.
+ * As cartas 15 a 21 do baralho ilustrado.
  *
- * São conquistas paralelas: registram feitos da campanha e aparecem no
- * relatório, sem conceder nenhuma vantagem. Não alteram o balanceamento.
+ * Toda vez que um exército cumpre uma dessas condições, o feito fica
+ * registrado como medalha e aparece no relatório. Além disso, no Modo Tático
+ * cada exército recebe uma delas como **missão de campanha**: cumprir a sua
+ * rende uma recompensa única — nunca a vitória, que continua sendo decidida
+ * apenas pelo objetivo secreto ou pela eliminação dos adversários.
+ *
+ * As recompensas são deliberadamente modestas: aceleram quem está indo bem
+ * sem encerrar a partida sozinhas.
  */
 enum class TacticalMedal(
     /** Número impresso na carta ilustrada correspondente (15 a 21). */
     val number: Int,
     val title: String,
-    val requirement: String
+    val requirement: String,
+    /** Exércitos somados ao próximo reforço de quem cumpre a missão. */
+    val rewardArmies: Int = 0,
+    /** Cartas táticas entregues na hora. */
+    val rewardCards: Int = 0,
+    /** Bônus somado à próxima troca de cartas de território. */
+    val rewardTradeBonus: Int = 0,
+    /** Pode ser sorteada como missão de campanha? */
+    val assignable: Boolean = true
 ) {
-    DOMINACAO_GLOBAL(15, "Dominação Global", "Controlar os 42 territórios."),
-    SUPREMACIA_CONTINENTAL(16, "Supremacia Continental", "Controlar um continente inteiro."),
-    CONTROLE_DE_FRONTEIRAS(17, "Controle de Fronteiras", "Controlar 24 territórios."),
-    EXTERMINIO(18, "Extermínio", "Eliminar um adversário da partida."),
-    SUPERIORIDADE_MILITAR(19, "Superioridade Militar", "Ter o maior exército do mapa."),
-    COLECIONADOR_DE_CARTAS(20, "Colecionador de Cartas", "Chegar a 5 cartas de território na mão."),
-    REVIRAVOLTA(21, "Reviravolta", "Assumir a liderança depois de estar 5 territórios atrás.");
+    DOMINACAO_GLOBAL(
+        15, "Dominação Global", "Controlar os 42 territórios.",
+        assignable = false // conquistar o mapa inteiro já encerra a partida
+    ),
+    SUPREMACIA_CONTINENTAL(
+        16, "Supremacia Continental", "Controlar um continente inteiro.",
+        rewardCards = 2
+    ),
+    CONTROLE_DE_FRONTEIRAS(
+        17, "Controle de Fronteiras",
+        "Controlar 14 territórios que fazem fronteira com o inimigo.",
+        rewardArmies = 3
+    ),
+    EXTERMINIO(
+        18, "Extermínio", "Eliminar um adversário da partida.",
+        rewardArmies = 3, rewardCards = 1
+    ),
+    SUPERIORIDADE_MILITAR(
+        19, "Superioridade Militar", "Ter o maior exército do mapa, com folga de 25% sobre o segundo.",
+        rewardArmies = 2
+    ),
+    COLECIONADOR_DE_CARTAS(
+        20, "Colecionador de Cartas", "Chegar a 5 cartas de território na mão.",
+        rewardTradeBonus = 4
+    ),
+    REVIRAVOLTA(
+        21, "Reviravolta", "Assumir a liderança depois de estar 8 territórios atrás.",
+        rewardArmies = 3, rewardCards = 1
+    );
+
+    /** Descrição curta da recompensa, para a interface. */
+    val rewardText: String
+        get() = buildList {
+            if (rewardArmies > 0) add("+$rewardArmies exércitos no próximo reforço")
+            if (rewardCards > 0) {
+                add(if (rewardCards == 1) "1 carta tática" else "$rewardCards cartas táticas")
+            }
+            if (rewardTradeBonus > 0) add("+$rewardTradeBonus na próxima troca de cartas")
+        }.joinToString(" e ").ifEmpty { "Registro de honra, sem recompensa." }
 
     companion object {
         val all: List<TacticalMedal> get() = entries
+
+        /** Medalhas que podem virar missão de campanha. */
+        val missions: List<TacticalMedal> get() = entries.filter { it.assignable }
+
         fun byId(id: Int): TacticalMedal? = entries.getOrNull(id)
     }
 }

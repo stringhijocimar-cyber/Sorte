@@ -129,6 +129,10 @@ fun HowToPlayScreen(vm: GameViewModel) {
                 "território. Abra CARTAS na barra superior e use a aba TÁTICAS. Cada " +
                 "carta diz em que fase funciona e, quando não puder ser usada, o " +
                 "motivo aparece na tela. A CPU também recebe e usa essas cartas.\n\n" +
+                "• MISSÕES DE CAMPANHA — cada exército recebe uma das cartas 16 a 21 " +
+                "como missão pública. Cumpri-la rende uma recompensa (exércitos, cartas " +
+                "táticas ou bônus de troca), nunca a vitória: essa continua vindo do " +
+                "objetivo secreto ou da eliminação dos adversários.\n\n" +
                 "• RELATÓRIO DO ALTO COMANDO — ao fim de cada rodada completa, um " +
                 "balanço com conquistas, perdas, baixas causadas e sofridas, " +
                 "fortificações e momentum de cada exército."

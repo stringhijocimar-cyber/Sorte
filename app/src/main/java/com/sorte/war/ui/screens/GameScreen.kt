@@ -154,6 +154,8 @@ fun GameScreen(vm: GameViewModel) {
     if (vm.showObjective) {
         ObjectiveDialog(
             objective = engine.currentPlayer.objective,
+            mission = engine.missionOf(engine.currentPlayerIndex),
+            missionDone = engine.missionCompleted(engine.currentPlayerIndex),
             onClose = { vm.closeObjective() }
         )
     }

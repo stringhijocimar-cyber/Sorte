@@ -317,7 +317,12 @@ fun FortifyDialog(fromName: String, toName: String, maxMovable: Int, onConfirm: 
 }
 
 @Composable
-fun ObjectiveDialog(objective: com.sorte.war.model.Objective?, onClose: () -> Unit) {
+fun ObjectiveDialog(
+    objective: com.sorte.war.model.Objective?,
+    mission: com.sorte.war.model.TacticalMedal? = null,
+    missionDone: Boolean = false,
+    onClose: () -> Unit
+) {
     AlertDialog(
         onDismissRequest = onClose,
         containerColor = PanelNavy,
@@ -337,6 +342,10 @@ fun ObjectiveDialog(objective: com.sorte.war.model.Objective?, onClose: () -> Un
                     color = Color.White,
                     style = MaterialTheme.typography.bodyLarge
                 )
+                if (mission != null) {
+                    Spacer(Modifier.height(16.dp))
+                    MissionPanel(mission, missionDone)
+                }
             }
         }
     )

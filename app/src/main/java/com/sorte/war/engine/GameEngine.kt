@@ -159,6 +159,30 @@ class GameEngine(
     /** Já esteve bem atrás do líder? (usado pela medalha Reviravolta.) */
     private val wasBehind = BooleanArray(players.size)
 
+    /**
+     * Missão de campanha de cada exército: uma das cartas 16 a 21, sorteada no
+     * início da partida e visível para todos. Cumpri-la dá uma recompensa
+     * única — nunca a vitória.
+     */
+    private val missionOf = arrayOfNulls<TacticalMedal>(players.size)
+    private val missionDone = BooleanArray(players.size)
+
+    /** Exércitos de recompensa aguardando o próximo reforço. */
+    private val missionArmiesOf = IntArray(players.size)
+
+    /** Bônus de recompensa somado à próxima troca de cartas. */
+    private val tradeBonusOf = IntArray(players.size)
+
+    /** Recompensa que entrou no reforço do turno atual (para o HUD). */
+    var missionArmiesApplied = 0
+        private set
+
+    fun missionOf(playerId: Int): TacticalMedal? =
+        if (playerId in players.indices) missionOf[playerId] else null
+
+    fun missionCompleted(playerId: Int): Boolean =
+        playerId in players.indices && missionDone[playerId]
+
     val currentPlayer: Player get() = players[currentPlayerIndex]
 
     init {
@@ -166,7 +190,10 @@ class GameEngine(
             setupBoard()
             assignObjectives()
             buildCardDeck()
-            if (tactical) buildTacticalDeck()
+            if (tactical) {
+                buildTacticalDeck()
+                assignMissions()
+            }
             currentPlayerIndex = startingPlayer
             takeSnapshot()
             startTurn()
@@ -275,6 +302,17 @@ class GameEngine(
         return if (drawPile.isEmpty()) null else drawPile.removeFirst()
     }
 
+    /**
+     * Sorteia uma missão de campanha diferente para cada exército. São seis
+     * missões para até seis jogadores, então ninguém repete.
+     */
+    private fun assignMissions() {
+        val pool = TacticalMedal.missions.shuffled(rng)
+        players.forEachIndexed { i, _ ->
+            missionOf[i] = pool.getOrNull(i % pool.size)
+        }
+    }
+
     private fun buildTacticalDeck() {
         tacticalDraw.clear()
         tacticalDraw.addAll(TacticalCard.buildDeck().shuffled(rng))
@@ -373,7 +411,10 @@ class GameEngine(
         ignoreFortification = false
         momentumApplied = if (tactical) momentumOf[currentPlayerIndex] else 0
         momentumOf[currentPlayerIndex] = 0
-        reinforcements = computeBaseReinforcements(currentPlayerIndex) + momentumApplied
+        missionArmiesApplied = if (tactical) missionArmiesOf[currentPlayerIndex] else 0
+        missionArmiesOf[currentPlayerIndex] = 0
+        reinforcements = computeBaseReinforcements(currentPlayerIndex) +
+            momentumApplied + missionArmiesApplied
         // a sabotagem vale apenas para este reforço
         continentBonusBlocked[currentPlayerIndex] = false
     }
@@ -632,7 +673,8 @@ class GameEngine(
         if (!isValidCardSet(cards)) return 0
         if (!currentPlayer.cards.containsAll(cards)) return 0
 
-        val bonus = tradeBonusFor(setsTraded)
+        val bonus = tradeBonusFor(setsTraded) + tradeBonusOf[currentPlayerIndex]
+        tradeBonusOf[currentPlayerIndex] = 0
         setsTraded++
         currentPlayer.cards.removeAll(cards)
         discardPile.addAll(cards)
@@ -829,8 +871,17 @@ class GameEngine(
     // ---------------------------------------------------------------------
 
     private fun award(player: Player, medal: TacticalMedal) {
-        if (player.medals.add(medal)) {
-            roundEvents.add("${player.name} conquistou a medalha ${medal.title}")
+        if (!player.medals.add(medal)) return
+        roundEvents.add("${player.name} conquistou a medalha ${medal.title}")
+        // Se era a missão de campanha deste exército, paga a recompensa (uma vez).
+        if (missionOf[player.id] == medal && !missionDone[player.id]) {
+            missionDone[player.id] = true
+            missionArmiesOf[player.id] += medal.rewardArmies
+            tradeBonusOf[player.id] += medal.rewardTradeBonus
+            repeat(medal.rewardCards) { giveTactical(player.id) }
+            roundEvents.add(
+                "MISSÃO CUMPRIDA — ${player.name}: ${medal.title} (${medal.rewardText})"
+            )
         }
     }
 
@@ -840,21 +891,28 @@ class GameEngine(
         val alive = players.filter { !it.eliminated }
         if (alive.isEmpty()) return
         val leaderTerritories = alive.maxOf { ownedCount(it.id) }
-        val topArmies = alive.maxOf { totalArmiesOf(it.id) }
-        val soleArmyLeader = alive.count { totalArmiesOf(it.id) == topArmies } == 1
+        val armyCounts = alive.map { totalArmiesOf(it.id) }.sortedDescending()
+        val topArmies = armyCounts.first()
+        val runnerUp = armyCounts.getOrElse(1) { 0 }
+        // Liderança isolada e com folga: 25% acima do segundo colocado.
+        val soleArmyLeader = alive.count { totalArmiesOf(it.id) == topArmies } == 1 &&
+            topArmies * 4 >= runnerUp * 5
         val soleTerritoryLeader = alive.count { ownedCount(it.id) == leaderTerritories } == 1
 
         for (p in alive) {
             val owned = ownedCount(p.id)
             if (owned >= n) award(p, TacticalMedal.DOMINACAO_GLOBAL)
             if (fullyOwnedContinents(p.id).isNotEmpty()) award(p, TacticalMedal.SUPREMACIA_CONTINENTAL)
-            if (owned >= 24) award(p, TacticalMedal.CONTROLE_DE_FRONTEIRAS)
+            val frontline = territoriesOf(p.id).count { t ->
+                MapData.territory(t).neighbors.any { ownerOf[it] != p.id }
+            }
+            if (frontline >= 14) award(p, TacticalMedal.CONTROLE_DE_FRONTEIRAS)
             if (eliminatedBy.any { it == p.id }) award(p, TacticalMedal.EXTERMINIO)
             if (alive.size > 1 && soleArmyLeader && totalArmiesOf(p.id) == topArmies) {
                 award(p, TacticalMedal.SUPERIORIDADE_MILITAR)
             }
             if (p.cards.size >= 5) award(p, TacticalMedal.COLECIONADOR_DE_CARTAS)
-            if (leaderTerritories - owned >= 5) wasBehind[p.id] = true
+            if (leaderTerritories - owned >= 8) wasBehind[p.id] = true
             if (wasBehind[p.id] && soleTerritoryLeader && owned == leaderTerritories) {
                 award(p, TacticalMedal.REVIRAVOLTA)
             }
@@ -971,23 +1029,33 @@ class GameEngine(
         line("draw", drawPile.joinToString(";") { cardToText(it) })
         line("discard", discardPile.joinToString(";") { cardToText(it) })
 
-        // --- estado da expansão tática (v4) ---
+        // --- v4: comum aos dois modos (o relatório de rodada existe em ambos) ---
         line("mode", mode.name)
         line("turn", turnNumber.toString())
         line("round", roundNumber.toString())
-        line("mom", momentumOf.joinToString(","))
-        line("momA", momentumApplied.toString())
         line("conqT", conquestsThisTurn.toString())
-        line("xfort", extraFortifies.toString())
-        line("atkB", attackDiceBonus.toString())
-        line("seaB", seaRouteDiceBonus.toString())
-        line("ignF", if (ignoreFortification) "1" else "0")
-        line("sabot", continentBonusBlocked.joinToString(",") { if (it) "1" else "0" })
-        line("truce", truceUntil.joinToString(";") { row -> row.joinToString(",") })
-        line("behind", wasBehind.joinToString(",") { if (it) "1" else "0" })
-        line("tused", tacticalUsedThisRound.joinToString(","))
-        line("tdraw", tacticalDraw.joinToString(",") { it.ordinal.toString() })
-        line("tdisc", tacticalDiscard.joinToString(",") { it.ordinal.toString() })
+
+        // --- v4: só da expansão tática ---
+        if (tactical) {
+            line("mom", momentumOf.joinToString(","))
+            line("momA", momentumApplied.toString())
+            line("xfort", extraFortifies.toString())
+            line("atkB", attackDiceBonus.toString())
+            line("seaB", seaRouteDiceBonus.toString())
+            line("ignF", if (ignoreFortification) "1" else "0")
+            line("sabot", continentBonusBlocked.joinToString(",") { if (it) "1" else "0" })
+            line("truce", truceUntil.joinToString(";") { row -> row.joinToString(",") })
+            line("behind", wasBehind.joinToString(",") { if (it) "1" else "0" })
+            line("tused", tacticalUsedThisRound.joinToString(","))
+            line("mission", missionOf.joinToString(",") { (it?.ordinal ?: -1).toString() })
+            line("mdone", missionDone.joinToString(",") { if (it) "1" else "0" })
+            line("marmies", missionArmiesOf.joinToString(","))
+            line("marmiesA", missionArmiesApplied.toString())
+            line("tradeb", tradeBonusOf.joinToString(","))
+            line("tdraw", tacticalDraw.joinToString(",") { it.ordinal.toString() })
+            line("tdisc", tacticalDiscard.joinToString(",") { it.ordinal.toString() })
+        }
+
         snapshot?.let { snap ->
             line("snapR", snap.roundNumber.toString())
             line(
@@ -1177,11 +1245,16 @@ class GameEngine(
                 e.discardPile.clear()
                 e.discardPile.addAll(cardsFromText(one("discard") ?: ""))
 
-                // --- expansão tática: ausente nos saves v3, entra zerada ---
+                // --- expansão tática ---
+                // Ausente nos saves v3. Só é lida quando a partida gravada era
+                // tática: assim um save clássico nunca volta com estado da
+                // expansão, mesmo que o arquivo tenha sido adulterado.
                 e.turnNumber = one("turn")?.toIntOrNull() ?: 0
                 e.roundNumber = one("round")?.toIntOrNull() ?: 1
-                e.momentumApplied = one("momA")?.toIntOrNull() ?: 0
                 e.conquestsThisTurn = one("conqT")?.toIntOrNull() ?: 0
+
+                if (e.tactical) {
+                e.momentumApplied = one("momA")?.toIntOrNull() ?: 0
                 e.extraFortifies = one("xfort")?.toIntOrNull() ?: 0
                 e.attackDiceBonus = one("atkB")?.toIntOrNull() ?: 0
                 e.seaRouteDiceBonus = one("seaB")?.toIntOrNull() ?: 0
@@ -1209,11 +1282,30 @@ class GameEngine(
                     }
                 }
 
+                one("mission")?.split(",")?.forEachIndexed { i, v ->
+                    if (i < e.missionOf.size) {
+                        e.missionOf[i] = TacticalMedal.byId(v.trim().toIntOrNull() ?: -1)
+                    }
+                }
+                one("mdone")?.split(",")?.forEachIndexed { i, v ->
+                    if (i < e.missionDone.size) e.missionDone[i] = v == "1"
+                }
+                ints("marmies").forEachIndexed { i, v ->
+                    if (i < e.missionArmiesOf.size) e.missionArmiesOf[i] = v
+                }
+                ints("tradeb").forEachIndexed { i, v ->
+                    if (i < e.tradeBonusOf.size) e.tradeBonusOf[i] = v
+                }
+                e.missionArmiesApplied = one("marmiesA")?.toIntOrNull() ?: 0
+
                 e.tacticalDraw.clear()
                 e.tacticalDraw.addAll(tacticalFromText(one("tdraw"), ","))
                 e.tacticalDiscard.clear()
                 e.tacticalDiscard.addAll(tacticalFromText(one("tdisc"), ","))
+                }
 
+                // O log de combate e o snapshot valem nos dois modos: o
+                // Relatório do Alto Comando é montado também no clássico.
                 e.battleLog.clear()
                 one("blog")?.split(";")?.forEach { row ->
                     val f = row.split(",").mapNotNull { it.trim().toIntOrNull() }

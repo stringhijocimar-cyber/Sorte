@@ -322,12 +322,22 @@ private fun CardZoomOverlay(card: CardArt, onClose: () -> Unit) {
                 } else if (medal != null) {
                     Spacer(Modifier.height(6.dp))
                     Text(
-                        "MEDALHA TÁTICA",
+                        if (medal.assignable) "MISSÃO DE CAMPANHA" else "MEDALHA DE HONRA",
                         color = Color(card.family.accentArgb),
                         fontSize = 8.sp,
                         fontWeight = FontWeight.Black,
                         letterSpacing = 0.9.sp
                     )
+                    if (medal.assignable) {
+                        Spacer(Modifier.height(3.dp))
+                        Text(
+                            "Recompensa: ${medal.rewardText}",
+                            color = Gold,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center
+                        )
+                    }
                 }
             }
             Spacer(Modifier.height(12.dp))

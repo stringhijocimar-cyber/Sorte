@@ -49,6 +49,7 @@ import com.sorte.war.model.MapData
 import com.sorte.war.model.Phase
 import com.sorte.war.model.RoundReport
 import com.sorte.war.model.TacticalCard
+import com.sorte.war.model.TacticalMedal
 import com.sorte.war.model.TacticalTarget
 import com.sorte.war.ui.screens.clickableNoRipple
 import com.sorte.war.ui.theme.Crimson
@@ -637,6 +638,35 @@ fun HighCommandReportDialog(
                     SectionLabel("ACONTECIMENTOS")
                     report.events.forEach {
                         Text("• $it", color = TextSecondary, fontSize = 11.sp)
+                    }
+                }
+
+                if (engine.tactical) {
+                    Spacer(Modifier.height(14.dp))
+                    SectionLabel("MISSÕES DE CAMPANHA")
+                    engine.players.forEach { p ->
+                        val m = engine.missionOf(p.id) ?: return@forEach
+                        val done = engine.missionCompleted(p.id)
+                        Row(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
+                            Text(
+                                p.name,
+                                color = TextSecondary, fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold, modifier = Modifier.weight(0.38f),
+                                maxLines = 1
+                            )
+                            Text(
+                                m.title,
+                                color = TextPrimary, fontSize = 9.sp,
+                                modifier = Modifier.weight(0.42f), maxLines = 1
+                            )
+                            Text(
+                                if (done) "CUMPRIDA" else "em curso",
+                                color = if (done) TacticalGreen else TextSecondary,
+                                fontSize = 8.5.sp,
+                                fontWeight = if (done) FontWeight.Black else FontWeight.Normal,
+                                modifier = Modifier.weight(0.20f)
+                            )
+                        }
                     }
                 }
 

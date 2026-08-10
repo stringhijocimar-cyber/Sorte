@@ -17,6 +17,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Flag
+import androidx.compose.material.icons.filled.MilitaryTech
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Style
 import androidx.compose.material.icons.filled.VolumeOff
@@ -192,6 +193,23 @@ fun TopBar(
                     accent = Gold,
                     icon = Icons.Filled.Bolt
                 )
+            }
+            if (engine.tactical && engine.missionArmiesApplied > 0) {
+                ModeChip(
+                    label = "MISSÃO +${engine.missionArmiesApplied}",
+                    accent = TacticalGreen,
+                    icon = Icons.Filled.MilitaryTech
+                )
+            }
+            if (engine.tactical && current.isHuman) {
+                engine.missionOf(current.id)?.let { mission ->
+                    val done = engine.missionCompleted(current.id)
+                    ModeChip(
+                        label = if (done) "MISSÃO CUMPRIDA" else mission.title.uppercase(),
+                        accent = if (done) TacticalGreen else TextSecondary,
+                        icon = Icons.Filled.MilitaryTech
+                    )
+                }
             }
         }
 
