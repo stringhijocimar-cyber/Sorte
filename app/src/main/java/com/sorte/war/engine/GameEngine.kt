@@ -1,0 +1,668 @@
+package com.sorte.war.engine
+
+import com.sorte.war.model.ArmyColor
+import com.sorte.war.model.Card
+import com.sorte.war.model.CardSymbol
+import com.sorte.war.model.Difficulty
+import com.sorte.war.model.MapData
+import com.sorte.war.model.Objective
+import com.sorte.war.model.Objectives
+import com.sorte.war.model.Phase
+import com.sorte.war.model.Player
+import com.sorte.war.model.PlayerPalette
+import com.sorte.war.model.SetupMode
+import kotlin.random.Random
+
+/**
+ * Motor de regras do War. Mantém todo o estado da partida e expõe as ações
+ * (reforçar, atacar, deslocar, trocar cartas, avançar de fase). A camada de UI
+ * observa o estado por meio de um "tick" no ViewModel após cada mutação.
+ */
+class GameEngine(
+    playerConfigs: List<PlayerConfig>,
+    val difficulty: Difficulty = Difficulty.VETERANO,
+    val setupMode: SetupMode = SetupMode.DADOS,
+    /** Quantas cartas de objetivo o jogador humano recebe para escolher. */
+    private val objectiveChoices: Int = 1,
+    private val rng: Random = Random(System.nanoTime()),
+    skipSetup: Boolean = false
+) {
+    data class PlayerConfig(
+        val name: String,
+        val color: ArmyColor,
+        val isHuman: Boolean,
+        val avatarId: Int = 0
+    )
+
+    val players: List<Player> = playerConfigs.mapIndexed { i, c ->
+        Player(
+            id = i, name = c.name, colorArgb = c.color.argb,
+            isHuman = c.isHuman, avatarId = c.avatarId
+        )
+    }
+
+    private val n = MapData.territories.size
+    val ownerOf = IntArray(n) { -1 }
+    val armiesOf = IntArray(n) { 0 }
+
+    var currentPlayerIndex = 0
+        private set
+    var phase = Phase.REFORCO
+        private set
+    var reinforcements = 0
+        private set
+    var winnerId: Int? = null
+        private set
+
+    /** Território conquistado neste turno? (Direito a uma carta ao fim do turno.) */
+    var conqueredThisTurn = false
+        private set
+    var fortifyUsed = false
+        private set
+
+    var lastBattle: com.sorte.war.model.BattleResult? = null
+        private set
+
+    /** Opção de avançar tropas adicionais após conquistar (decisão do jogador humano). */
+    data class AdvanceOption(val from: Int, val to: Int, val min: Int, val max: Int)
+    var pendingAdvance: AdvanceOption? = null
+        private set
+
+    /** Quem eliminou cada jogador (para objetivos de destruição). -1 = ninguém. */
+    private val eliminatedBy = IntArray(players.size) { -1 }
+
+    private val drawPile = ArrayDeque<Card>()
+    private val discardPile = mutableListOf<Card>()
+    private var setsTraded = 0
+
+    /** Dado tirado por cada exército no sorteio inicial (vazio no modo aleatório). */
+    var initialRolls: IntArray = IntArray(0)
+        private set
+
+    /** Índice de quem abriu a partida (vencedor do sorteio). */
+    var startingPlayer: Int = 0
+        private set
+
+    /**
+     * Cartas de objetivo oferecidas ao jogador humano. Enquanto não estiver
+     * vazia, a UI mostra as cartas para ele escolher uma.
+     */
+    var objectiveOptions: List<Objective> = emptyList()
+        private set
+
+    val currentPlayer: Player get() = players[currentPlayerIndex]
+
+    init {
+        if (!skipSetup) {
+            setupBoard()
+            assignObjectives()
+            buildCardDeck()
+            currentPlayerIndex = startingPlayer
+            startTurn()
+        }
+    }
+
+    // ---------------------------------------------------------------------
+    // SETUP
+    // ---------------------------------------------------------------------
+
+    private fun setupBoard() {
+        // Quem começa: no modo DADOS, o maior dado (com desempate por nova rolagem).
+        startingPlayer = if (setupMode == SetupMode.DADOS) {
+            var rolls: IntArray
+            var winners: List<Int>
+            var guard = 0
+            do {
+                rolls = IntArray(players.size) { rng.nextInt(6) + 1 }
+                val best = rolls.max()
+                winners = rolls.indices.filter { rolls[it] == best }
+            } while (winners.size > 1 && guard++ < 20)
+            initialRolls = rolls
+            winners.first()
+        } else {
+            initialRolls = IntArray(0)
+            rng.nextInt(players.size)
+        }
+
+        val ids = (0 until n).toMutableList().also { it.shuffle(rng) }
+        // Distribui territórios em rodízio, começando por quem venceu o sorteio.
+        ids.forEachIndexed { index, tId ->
+            val p = (startingPlayer + index) % players.size
+            ownerOf[tId] = p
+            armiesOf[tId] = 1
+        }
+        // Exércitos iniciais por jogador (padrão clássico).
+        val startArmies = when (players.size) {
+            2 -> 40; 3 -> 35; 4 -> 30; 5 -> 25; else -> 20
+        }
+        for (p in players.indices) {
+            val owned = (0 until n).filter { ownerOf[it] == p }
+            var remaining = startArmies - owned.size
+            while (remaining > 0) {
+                val t = owned[rng.nextInt(owned.size)]
+                armiesOf[t]++
+                remaining--
+            }
+        }
+    }
+
+    private fun assignObjectives() {
+        val deck = Objectives.buildDeck().shuffled(rng).toMutableList()
+        val colorsInPlay = players.map { it.colorArgb }.toSet()
+        for (p in players) {
+            if (p.isHuman && objectiveChoices > 1) {
+                // Oferece algumas cartas; o objetivo só é definido na escolha.
+                val opts = ArrayList<Objective>(objectiveChoices)
+                repeat(objectiveChoices.coerceAtMost(deck.size)) {
+                    opts.add(sanitizeObjective(deck.removeAt(0), p, colorsInPlay))
+                }
+                objectiveOptions = opts
+                p.objective = opts.first()   // provisório, até a escolha
+            } else {
+                p.objective = sanitizeObjective(deck.removeAt(0), p, colorsInPlay)
+            }
+        }
+    }
+
+    /** Confirma a carta de objetivo escolhida pelo jogador humano. */
+    fun chooseObjective(index: Int) {
+        val opts = objectiveOptions
+        if (opts.isEmpty()) return
+        val chosen = opts.getOrNull(index) ?: opts.first()
+        players.firstOrNull { it.isHuman }?.objective = chosen
+        objectiveOptions = emptyList()
+    }
+
+    private fun sanitizeObjective(
+        obj: Objective, owner: Player, colorsInPlay: Set<Long>
+    ): Objective {
+        if (obj is Objective.DestroyPlayer) {
+            if (obj.targetColorArgb == owner.colorArgb || obj.targetColorArgb !in colorsInPlay) {
+                return Objectives.fallback()
+            }
+        }
+        return obj
+    }
+
+    private fun buildCardDeck() {
+        val symbols = listOf(CardSymbol.CIRCULO, CardSymbol.QUADRADO, CardSymbol.TRIANGULO)
+        MapData.territories.forEach { t ->
+            drawPile.add(Card(symbols[t.id % 3], t.id))
+        }
+        drawPile.add(Card(CardSymbol.CORINGA, -1))
+        drawPile.add(Card(CardSymbol.CORINGA, -1))
+        drawPile.shuffle()
+    }
+
+    private fun drawCard(): Card? {
+        if (drawPile.isEmpty()) {
+            if (discardPile.isEmpty()) return null
+            drawPile.addAll(discardPile)
+            discardPile.clear()
+            drawPile.shuffle()
+        }
+        return if (drawPile.isEmpty()) null else drawPile.removeFirst()
+    }
+
+    // ---------------------------------------------------------------------
+    // CONSULTAS
+    // ---------------------------------------------------------------------
+
+    fun territoriesOf(playerId: Int): List<Int> = (0 until n).filter { ownerOf[it] == playerId }
+    fun ownedCount(playerId: Int): Int = (0 until n).count { ownerOf[it] == playerId }
+
+    fun ownsContinent(playerId: Int, continentId: Int): Boolean =
+        MapData.continent(continentId).territoryIds.all { ownerOf[it] == playerId }
+
+    fun fullyOwnedContinents(playerId: Int): List<Int> =
+        MapData.continents.filter { ownsContinent(playerId, it.id) }.map { it.id }
+
+    /** Territórios de onde o jogador atual pode atacar (>1 exército e vizinho inimigo). */
+    fun canAttackFrom(tId: Int): Boolean {
+        if (ownerOf[tId] != currentPlayerIndex || armiesOf[tId] < 2) return false
+        return MapData.territory(tId).neighbors.any { ownerOf[it] != currentPlayerIndex }
+    }
+
+    fun attackTargets(from: Int): List<Int> =
+        MapData.territory(from).neighbors.filter { ownerOf[it] != currentPlayerIndex }
+
+    /** Alvos de deslocamento: territórios próprios conectados por caminho amigo. */
+    fun fortifyTargets(from: Int): List<Int> {
+        if (ownerOf[from] != currentPlayerIndex || armiesOf[from] < 2) return emptyList()
+        val visited = HashSet<Int>()
+        val queue = ArrayDeque<Int>()
+        queue.add(from); visited.add(from)
+        while (queue.isNotEmpty()) {
+            val cur = queue.removeFirst()
+            for (nb in MapData.territory(cur).neighbors) {
+                if (nb !in visited && ownerOf[nb] == currentPlayerIndex) {
+                    visited.add(nb); queue.add(nb)
+                }
+            }
+        }
+        visited.remove(from)
+        return visited.toList()
+    }
+
+    // ---------------------------------------------------------------------
+    // TURNO / FASES
+    // ---------------------------------------------------------------------
+
+    private fun startTurn() {
+        conqueredThisTurn = false
+        fortifyUsed = false
+        pendingAdvance = null
+        phase = Phase.REFORCO
+        reinforcements = computeBaseReinforcements(currentPlayerIndex)
+    }
+
+    fun computeBaseReinforcements(playerId: Int): Int {
+        val terr = ownedCount(playerId)
+        val base = maxOf(3, terr / 2)
+        val bonus = fullyOwnedContinents(playerId).sumOf { MapData.continent(it).bonus }
+        // vantagem concedida às CPUs conforme o nível de dificuldade escolhido
+        val handicap =
+            if (players[playerId].isHuman) 0 else difficulty.bonusReinforcements
+        return base + bonus + handicap
+    }
+
+    /** Coloca [count] exércitos num território próprio durante o reforço. */
+    fun reinforce(tId: Int, count: Int = 1): Boolean {
+        if (phase != Phase.REFORCO) return false
+        if (ownerOf[tId] != currentPlayerIndex) return false
+        val c = count.coerceAtMost(reinforcements)
+        if (c <= 0) return false
+        armiesOf[tId] += c
+        reinforcements -= c
+        return true
+    }
+
+    fun canAdvanceFromReinforce(): Boolean = reinforcements == 0
+
+    /** Avança para a próxima fase respeitando as regras. */
+    fun advancePhase() {
+        when (phase) {
+            Phase.REFORCO -> if (reinforcements == 0) phase = Phase.ATAQUE
+            Phase.ATAQUE -> { pendingAdvance = null; phase = Phase.DESLOCAMENTO }
+            Phase.DESLOCAMENTO -> endTurn()
+            Phase.FIM_DE_JOGO -> {}
+        }
+    }
+
+    private fun endTurn() {
+        // Direito a uma carta se conquistou ao menos um território.
+        if (conqueredThisTurn) {
+            drawCard()?.let { currentPlayer.cards.add(it) }
+        }
+        // Próximo jogador não eliminado.
+        var next = currentPlayerIndex
+        do {
+            next = (next + 1) % players.size
+        } while (players[next].eliminated && next != currentPlayerIndex)
+        currentPlayerIndex = next
+        startTurn()
+        checkVictory()
+    }
+
+    // ---------------------------------------------------------------------
+    // COMBATE
+    // ---------------------------------------------------------------------
+
+    /**
+     * Executa uma rodada de combate. Em caso de conquista, move [moveArmies]
+     * (ou o mínimo de dados usados) para o território conquistado.
+     */
+    fun attack(from: Int, to: Int, moveArmies: Int? = null): com.sorte.war.model.BattleResult? {
+        if (phase != Phase.ATAQUE) return null
+        if (ownerOf[from] != currentPlayerIndex) return null
+        if (ownerOf[to] == currentPlayerIndex) return null
+        if (to !in MapData.territory(from).neighbors) return null
+        if (armiesOf[from] < 2) return null
+        pendingAdvance = null
+
+        val attackDice = minOf(3, armiesOf[from] - 1)
+        val defendDice = minOf(3, armiesOf[to])
+
+        val aRolls = List(attackDice) { rng.nextInt(6) + 1 }.sortedDescending()
+        val dRolls = List(defendDice) { rng.nextInt(6) + 1 }.sortedDescending()
+
+        var aLoss = 0
+        var dLoss = 0
+        val comparisons = minOf(aRolls.size, dRolls.size)
+        for (i in 0 until comparisons) {
+            if (aRolls[i] > dRolls[i]) dLoss++ else aLoss++ // empate favorece o defensor
+        }
+
+        armiesOf[from] -= aLoss
+        armiesOf[to] -= dLoss
+
+        var conquered = false
+        if (armiesOf[to] <= 0) {
+            conquered = true
+            val defenderId = ownerOf[to]
+            ownerOf[to] = currentPlayerIndex
+            val minMove = attackDice
+            val maxMove = armiesOf[from] - 1
+            val move = (moveArmies ?: minMove).coerceIn(minMove, maxMove)
+            armiesOf[from] -= move
+            armiesOf[to] = move
+            conqueredThisTurn = true
+            pendingAdvance = if (moveArmies == null && maxMove > minMove)
+                AdvanceOption(from, to, minMove, maxMove) else null
+            handlePossibleElimination(defenderId, currentPlayerIndex)
+        }
+
+        val result = com.sorte.war.model.BattleResult(
+            attackerTerritoryId = from,
+            defenderTerritoryId = to,
+            attackerDice = aRolls,
+            defenderDice = dRolls,
+            attackerLosses = aLoss,
+            defenderLosses = dLoss,
+            conquered = conquered
+        )
+        lastBattle = result
+        checkVictory()
+        return result
+    }
+
+    private fun handlePossibleElimination(defenderId: Int, killerId: Int) {
+        if (defenderId < 0) return
+        if (ownedCount(defenderId) == 0 && !players[defenderId].eliminated) {
+            players[defenderId].eliminated = true
+            eliminatedBy[defenderId] = killerId
+            // O vencedor herda as cartas do eliminado (regra do War).
+            players[killerId].cards.addAll(players[defenderId].cards)
+            players[defenderId].cards.clear()
+        }
+    }
+
+    /** Move tropas adicionais para o território recém-conquistado (uma vez). */
+    fun advanceMore(extra: Int) {
+        val opt = pendingAdvance ?: return
+        val c = extra.coerceIn(0, armiesOf[opt.from] - 1)
+        armiesOf[opt.from] -= c
+        armiesOf[opt.to] += c
+        pendingAdvance = null
+    }
+
+    fun clearPendingAdvance() {
+        pendingAdvance = null
+    }
+
+    // ---------------------------------------------------------------------
+    // DESLOCAMENTO
+    // ---------------------------------------------------------------------
+
+    fun fortify(from: Int, to: Int, count: Int): Boolean {
+        if (phase != Phase.DESLOCAMENTO || fortifyUsed) return false
+        if (ownerOf[from] != currentPlayerIndex || ownerOf[to] != currentPlayerIndex) return false
+        if (to !in fortifyTargets(from)) return false
+        val c = count.coerceIn(1, armiesOf[from] - 1)
+        if (c <= 0) return false
+        armiesOf[from] -= c
+        armiesOf[to] += c
+        fortifyUsed = true
+        return true
+    }
+
+    // ---------------------------------------------------------------------
+    // CARTAS
+    // ---------------------------------------------------------------------
+
+    fun isValidCardSet(cards: List<Card>): Boolean {
+        if (cards.size != 3) return false
+        val wilds = cards.count { it.symbol == CardSymbol.CORINGA }
+        val nonWild = cards.filter { it.symbol != CardSymbol.CORINGA }.map { it.symbol }
+        if (wilds >= 1) return true // um coringa completa qualquer trinca
+        val distinct = nonWild.toSet()
+        return distinct.size == 1 || distinct.size == 3
+    }
+
+    /** Bônus escalonado por conjunto trocado (padrão War). */
+    fun nextTradeBonus(): Int = tradeBonusFor(setsTraded)
+
+    private fun tradeBonusFor(setsAlready: Int): Int = when (setsAlready) {
+        0 -> 4; 1 -> 6; 2 -> 8; 3 -> 10; 4 -> 12; 5 -> 15
+        else -> 15 + (setsAlready - 5) * 5
+    }
+
+    /**
+     * Troca um conjunto de 3 cartas por exércitos (somados ao reforço).
+     * Bônus adicional de +2 se possuir um território mostrado numa das cartas.
+     */
+    fun tradeCards(cards: List<Card>): Int {
+        if (phase != Phase.REFORCO) return 0
+        if (!isValidCardSet(cards)) return 0
+        if (!currentPlayer.cards.containsAll(cards)) return 0
+
+        val bonus = tradeBonusFor(setsTraded)
+        setsTraded++
+        currentPlayer.cards.removeAll(cards)
+        discardPile.addAll(cards)
+
+        var territoryBonus = 0
+        for (card in cards) {
+            if (card.territoryId >= 0 && ownerOf[card.territoryId] == currentPlayerIndex) {
+                armiesOf[card.territoryId] += 2
+                territoryBonus += 2
+            }
+        }
+        reinforcements += bonus
+        return bonus + territoryBonus
+    }
+
+    fun mustTradeCards(): Boolean = currentPlayer.cards.size >= 5
+
+    // ---------------------------------------------------------------------
+    // VITÓRIA
+    // ---------------------------------------------------------------------
+
+    private fun checkVictory() {
+        val alive = players.filter { !it.eliminated }
+        if (alive.size == 1) {
+            winnerId = alive[0].id
+            phase = Phase.FIM_DE_JOGO
+            return
+        }
+        for (p in alive) {
+            if (isObjectiveComplete(p)) {
+                winnerId = p.id
+                phase = Phase.FIM_DE_JOGO
+                return
+            }
+        }
+    }
+
+    // ---------------------------------------------------------------------
+    // SALVAR / CARREGAR PARTIDA
+    // ---------------------------------------------------------------------
+
+    /** Serializa a partida inteira num texto (formato próprio, sem dependências). */
+    fun toSave(): String {
+        val sb = StringBuilder()
+        fun line(k: String, v: String) { sb.append(k).append('=').append(v).append('\n') }
+
+        line("v", SAVE_VERSION.toString())
+        line("diff", difficulty.name)
+        line("cur", currentPlayerIndex.toString())
+        line("phase", phase.name)
+        line("reinf", reinforcements.toString())
+        line("winner", (winnerId ?: -1).toString())
+        line("conq", if (conqueredThisTurn) "1" else "0")
+        line("fort", if (fortifyUsed) "1" else "0")
+        line("sets", setsTraded.toString())
+        line("owner", ownerOf.joinToString(","))
+        line("armies", armiesOf.joinToString(","))
+        line("elimBy", eliminatedBy.joinToString(","))
+        line("draw", drawPile.joinToString(";") { cardToText(it) })
+        line("discard", discardPile.joinToString(";") { cardToText(it) })
+        line("np", players.size.toString())
+        players.forEach { p ->
+            val fields = listOf(
+                p.id.toString(),
+                p.name,
+                p.colorArgb.toString(),
+                if (p.isHuman) "1" else "0",
+                if (p.eliminated) "1" else "0",
+                p.cards.joinToString(";") { cardToText(it) },
+                objectiveToText(p.objective),
+                p.avatarId.toString()
+            )
+            line("p", fields.joinToString(FS))
+        }
+        return sb.toString()
+    }
+
+    companion object {
+        const val SAVE_VERSION = 3
+        private const val FS = "\u0001" // separador de campos
+        private const val GS = "\u0002" // separador de grupos
+
+        private fun cardToText(c: Card): String = "${c.symbol.ordinal}:${c.territoryId}"
+
+        private fun cardFromText(s: String): Card? {
+            val p = s.split(":")
+            if (p.size != 2) return null
+            val sym = CardSymbol.entries.getOrNull(p[0].toIntOrNull() ?: return null) ?: return null
+            return Card(sym, p[1].toIntOrNull() ?: return null)
+        }
+
+        private fun cardsFromText(s: String): MutableList<Card> =
+            if (s.isBlank()) mutableListOf()
+            else s.split(";").mapNotNull { cardFromText(it) }.toMutableList()
+
+        private fun objectiveToText(o: Objective?): String = when (o) {
+            null -> ""
+            is Objective.ConquerContinents ->
+                listOf("C", o.continentIds.joinToString("-"), o.extraAny.toString(), o.description)
+                    .joinToString(GS)
+            is Objective.ConquerTerritories ->
+                listOf("T", o.count.toString(), o.minArmiesEach.toString(), o.description)
+                    .joinToString(GS)
+            is Objective.DestroyPlayer ->
+                listOf("D", o.targetColorArgb.toString(), o.targetColorName, o.description)
+                    .joinToString(GS)
+        }
+
+        private fun objectiveFromText(s: String): Objective? {
+            if (s.isBlank()) return null
+            val p = s.split(GS)
+            if (p.size < 4) return null
+            return when (p[0]) {
+                "C" -> Objective.ConquerContinents(
+                    continentIds = p[1].split("-").mapNotNull { it.toIntOrNull() },
+                    extraAny = p[2].toIntOrNull() ?: 0,
+                    desc = p[3]
+                )
+                "T" -> Objective.ConquerTerritories(
+                    count = p[1].toIntOrNull() ?: 24,
+                    minArmiesEach = p[2].toIntOrNull() ?: 1,
+                    desc = p[3]
+                )
+                "D" -> Objective.DestroyPlayer(
+                    targetColorArgb = p[1].toLongOrNull() ?: 0L,
+                    targetColorName = p[2],
+                    desc = p[3]
+                )
+                else -> null
+            }
+        }
+
+        /** Recria a partida a partir do texto gerado por [toSave]; null se inválido. */
+        fun fromSave(text: String): GameEngine? {
+            try {
+                val map = HashMap<String, MutableList<String>>()
+                text.lineSequence().forEach { ln ->
+                    val i = ln.indexOf('=')
+                    if (i > 0) map.getOrPut(ln.substring(0, i)) { mutableListOf() }
+                        .add(ln.substring(i + 1))
+                }
+                fun one(k: String): String? = map[k]?.firstOrNull()
+                if ((one("v")?.toIntOrNull() ?: 0) != SAVE_VERSION) return null
+
+                val rows = map["p"] ?: return null
+                if (rows.isEmpty()) return null
+
+                val parsed = rows.map { it.split(FS) }
+                if (parsed.any { it.size < 8 }) return null
+
+                val configs = parsed.map {
+                    PlayerConfig(
+                        name = it[1],
+                        color = ArmyColor(it[1], it[2].toLong()),
+                        isHuman = it[3] == "1",
+                        avatarId = it[7].toIntOrNull() ?: 0
+                    )
+                }
+                val diff = runCatching {
+                    Difficulty.valueOf(one("diff") ?: Difficulty.VETERANO.name)
+                }.getOrDefault(Difficulty.VETERANO)
+                val e = GameEngine(configs, diff, skipSetup = true)
+
+                parsed.forEachIndexed { idx, f ->
+                    val p = e.players[idx]
+                    p.eliminated = f[4] == "1"
+                    p.cards.clear()
+                    p.cards.addAll(cardsFromText(f[5]))
+                    p.objective = objectiveFromText(f[6])
+                }
+
+                fun ints(k: String): List<Int> =
+                    one(k)?.split(",")?.mapNotNull { it.trim().toIntOrNull() } ?: emptyList()
+
+                val owner = ints("owner")
+                val armies = ints("armies")
+                if (owner.size != e.ownerOf.size || armies.size != e.armiesOf.size) return null
+                for (i in owner.indices) { e.ownerOf[i] = owner[i]; e.armiesOf[i] = armies[i] }
+
+                val elim = ints("elimBy")
+                for (i in elim.indices) if (i < e.eliminatedBy.size) e.eliminatedBy[i] = elim[i]
+
+                e.currentPlayerIndex = one("cur")?.toIntOrNull() ?: 0
+                e.phase = Phase.valueOf(one("phase") ?: Phase.REFORCO.name)
+                e.reinforcements = one("reinf")?.toIntOrNull() ?: 0
+                e.winnerId = one("winner")?.toIntOrNull()?.takeIf { it >= 0 }
+                e.conqueredThisTurn = one("conq") == "1"
+                e.fortifyUsed = one("fort") == "1"
+                e.setsTraded = one("sets")?.toIntOrNull() ?: 0
+
+                e.drawPile.clear()
+                e.drawPile.addAll(cardsFromText(one("draw") ?: ""))
+                e.discardPile.clear()
+                e.discardPile.addAll(cardsFromText(one("discard") ?: ""))
+
+                return e
+            } catch (t: Throwable) {
+                return null
+            }
+        }
+    }
+
+    fun isObjectiveComplete(player: Player): Boolean {
+        val obj = player.objective ?: return false
+        return when (obj) {
+            is Objective.ConquerContinents -> {
+                val fixedOk = obj.continentIds.all { ownsContinent(player.id, it) }
+                if (!fixedOk) return false
+                if (obj.extraAny <= 0) return true
+                val extras = fullyOwnedContinents(player.id).count { it !in obj.continentIds }
+                extras >= obj.extraAny
+            }
+            is Objective.ConquerTerritories -> {
+                territoriesOf(player.id).count { armiesOf[it] >= obj.minArmiesEach } >= obj.count
+            }
+            is Objective.DestroyPlayer -> {
+                val target = players.firstOrNull { it.colorArgb == obj.targetColorArgb }
+                if (target == null) {
+                    // cor não está em jogo -> objetivo alternativo (24 territórios)
+                    ownedCount(player.id) >= 24
+                } else if (target.eliminated) {
+                    // válido só se foi este jogador quem eliminou; senão, 24 territórios
+                    if (eliminatedBy[target.id] == player.id) true
+                    else ownedCount(player.id) >= 24
+                } else false
+            }
+        }
+    }
+}
