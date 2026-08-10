@@ -16,6 +16,7 @@ import com.sorte.war.ui.components.BottomBar
 import com.sorte.war.ui.components.CardsDialog
 import com.sorte.war.ui.components.CommanderReportDialog
 import com.sorte.war.ui.components.FortifyDialog
+import com.sorte.war.ui.components.HighCommandReportDialog
 import com.sorte.war.ui.components.MapCanvas
 import com.sorte.war.ui.components.ObjectiveChoiceDialog
 import com.sorte.war.ui.components.ObjectiveDialog
@@ -83,8 +84,18 @@ fun GameScreen(vm: GameViewModel) {
         )
     }
 
-    vm.commanderReport?.let { report ->
-        CommanderReportDialog(report = report, onClose = { vm.dismissReport() })
+    val round = vm.roundReport
+    if (round != null) {
+        HighCommandReportDialog(
+            engine = engine,
+            report = round,
+            flavor = vm.commanderReport?.flavor,
+            onClose = { vm.dismissReport() }
+        )
+    } else {
+        vm.commanderReport?.let { report ->
+            CommanderReportDialog(report = report, onClose = { vm.dismissReport() })
+        }
     }
 
     if (vm.showStartRoll && engine.initialRolls.isNotEmpty()) {
@@ -130,18 +141,19 @@ fun GameScreen(vm: GameViewModel) {
 
     if (vm.showCards) {
         CardsDialog(
-            cards = engine.currentPlayer.cards.toList(),
-            canTradeNow = engine.phase == Phase.REFORCO && engine.currentPlayer.isHuman,
-            nextBonus = engine.nextTradeBonus(),
-            isValidSet = { engine.isValidCardSet(it) },
+            engine = engine,
+            refresh = refresh,
             onTrade = { vm.tradeCards(it) },
+            onPlayTactical = { card, primary, secondary, amount, targetPlayer ->
+                vm.playTactical(card, primary, secondary, amount, targetPlayer)
+            },
             onClose = { vm.closeCards() }
         )
     }
 
     if (vm.showObjective) {
         ObjectiveDialog(
-            description = engine.currentPlayer.objective?.description ?: "",
+            objective = engine.currentPlayer.objective,
             onClose = { vm.closeObjective() }
         )
     }

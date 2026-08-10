@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.sorte.war.model.Avatar
 import com.sorte.war.model.Difficulty
+import com.sorte.war.model.GameMode
 import com.sorte.war.model.PlayerPalette
 import com.sorte.war.model.SetupMode
 import com.sorte.war.ui.GameViewModel
@@ -67,6 +68,7 @@ fun NewGameScreen(vm: GameViewModel) {
     var avatarIndex by remember { mutableIntStateOf(vm.stats.favoriteAvatarId) }
     var difficulty by remember { mutableStateOf(Difficulty.VETERANO) }
     var setupMode by remember { mutableStateOf(SetupMode.DADOS) }
+    var gameMode by remember { mutableStateOf(GameMode.CLASSICO) }
     var pickObjective by remember { mutableStateOf(true) }
 
     BackHandler { vm.goTo(Screen.HOME) }
@@ -274,7 +276,55 @@ fun NewGameScreen(vm: GameViewModel) {
 
         Spacer(Modifier.height(10.dp))
 
-        SetupSection(5, "DIFICULDADE") {
+        SetupSection(5, "MODO DE JOGO") {
+            GameMode.entries.forEach { mode ->
+                val selected = gameMode == mode
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 3.dp)
+                        .clip(RoundedCornerShape(11.dp))
+                        .background(
+                            if (selected) TacticalTeal.copy(alpha = 0.09f)
+                            else Color.Black.copy(alpha = 0.13f)
+                        )
+                        .border(
+                            if (selected) 1.6.dp else 1.dp,
+                            if (selected) TacticalTeal else TacticalStroke,
+                            RoundedCornerShape(11.dp)
+                        )
+                        .clickableNoRipple { gameMode = mode }
+                        .padding(horizontal = 11.dp, vertical = 9.dp)
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            mode.label.uppercase(),
+                            color = if (selected) TacticalTeal else TextPrimary,
+                            fontWeight = FontWeight.Black,
+                            fontSize = 10.sp
+                        )
+                        Text(
+                            mode.tagline,
+                            color = TextSecondary,
+                            fontSize = 9.sp
+                        )
+                    }
+                    if (selected) {
+                        Icon(
+                            Icons.Filled.Check,
+                            contentDescription = null,
+                            tint = TacticalTeal,
+                            modifier = Modifier.size(15.dp)
+                        )
+                    }
+                }
+            }
+        }
+
+        Spacer(Modifier.height(10.dp))
+
+        SetupSection(6, "DIFICULDADE") {
             Row(
                 horizontalArrangement = Arrangement.spacedBy(7.dp),
                 modifier = Modifier
@@ -329,7 +379,7 @@ fun NewGameScreen(vm: GameViewModel) {
 
         Spacer(Modifier.height(10.dp))
 
-        SetupSection(6, "INÍCIO DA PARTIDA") {
+        SetupSection(7, "INÍCIO DA PARTIDA") {
             SetupMode.entries.forEach { mode ->
                 val selected = setupMode == mode
                 Row(
@@ -377,7 +427,7 @@ fun NewGameScreen(vm: GameViewModel) {
 
         Spacer(Modifier.height(10.dp))
 
-        SetupSection(7, "OBJETIVO SECRETO") {
+        SetupSection(8, "OBJETIVO SECRETO") {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
@@ -448,7 +498,7 @@ fun NewGameScreen(vm: GameViewModel) {
                 .clickableNoRipple {
                     vm.startGame(
                         name, players, colorIndex, avatarIndex,
-                        difficulty, setupMode, pickObjective
+                        difficulty, setupMode, pickObjective, gameMode
                     )
                 }
                 .padding(horizontal = 16.dp)

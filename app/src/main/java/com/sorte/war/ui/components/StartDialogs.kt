@@ -20,7 +20,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -53,11 +52,10 @@ fun StartRollDialog(
     onClose: () -> Unit
 ) {
     var revealed by remember { mutableStateOf(false) }
-    var tick by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(Unit) {
         sound?.play(Sfx.DICE)
-        repeat(10) { delay(85); tick++ }
+        delay(1000)
         revealed = true
         sound?.play(Sfx.CONQUER, 0.7f)
     }
@@ -88,7 +86,6 @@ fun StartRollDialog(
                 Spacer(Modifier.height(12.dp))
                 players.forEachIndexed { i, p ->
                     val actual = rolls.getOrElse(i) { 1 }
-                    val face = if (revealed) actual else ((tick * 5 + i * 7 + actual) % 6) + 1
                     val winner = revealed && i == startingPlayer
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -107,13 +104,29 @@ fun StartRollDialog(
                             ringColor = Color(p.colorArgb)
                         )
                         Spacer(Modifier.width(10.dp))
-                        Text(
-                            p.name,
-                            color = if (winner) Gold else Color.White,
-                            fontWeight = if (winner) FontWeight.Bold else FontWeight.Normal,
-                            modifier = Modifier.weight(1f)
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                p.name.uppercase(),
+                                color = if (winner) Gold else Color.White,
+                                fontWeight = if (winner) FontWeight.Black else FontWeight.Normal
+                            )
+                            if (revealed) {
+                                Text(
+                                    if (winner) "INICIA A CAMPANHA" else "dado $actual",
+                                    color = if (winner) Gold else TextSecondary,
+                                    fontSize = 9.sp,
+                                    fontWeight = if (winner) FontWeight.Black else FontWeight.Normal,
+                                    letterSpacing = if (winner) 1.2.sp else 0.sp
+                                )
+                            }
+                        }
+                        DieFace(
+                            value = actual,
+                            win = if (winner) true else null,
+                            size = 32,
+                            rolling = !revealed,
+                            index = i
                         )
-                        DieFace(face, if (winner) true else null, size = 32)
                     }
                 }
             }
@@ -174,6 +187,8 @@ fun ObjectiveChoiceDialog(
                 }
                 if (flipped >= 0) {
                     Spacer(Modifier.height(14.dp))
+                    ObjectiveArt(options[flipped])
+                    Spacer(Modifier.height(10.dp))
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()

@@ -17,6 +17,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Flag
+import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Style
 import androidx.compose.material.icons.filled.VolumeOff
 import androidx.compose.material.icons.filled.VolumeUp
@@ -34,6 +35,7 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.sorte.war.engine.GameEngine
+import com.sorte.war.model.Fortification
 import com.sorte.war.model.MapData
 import com.sorte.war.model.Phase
 import com.sorte.war.ui.screens.clickableNoRipple
@@ -177,6 +179,26 @@ fun TopBar(
 
         Row(
             verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(5.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            ModeChip(
+                label = if (engine.tactical) "MODO TÁTICO" else "MODO CLÁSSICO",
+                accent = if (engine.tactical) TacticalTeal else Gold
+            )
+            if (engine.tactical && engine.momentumApplied > 0) {
+                ModeChip(
+                    label = "MOMENTUM +${engine.momentumApplied}",
+                    accent = Gold,
+                    icon = Icons.Filled.Bolt
+                )
+            }
+        }
+
+        Spacer(Modifier.height(if (compact) 4.dp else 6.dp))
+
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.fillMaxWidth()
         ) {
             Row(
@@ -198,7 +220,9 @@ fun TopBar(
                     )
                     HudAction(
                         icon = Icons.Filled.Style,
-                        label = "CARTAS ${current.cards.size}",
+                        label = if (engine.tactical)
+                            "CARTAS ${current.cards.size} + ${current.tacticalCards.size}"
+                        else "CARTAS ${current.cards.size}",
                         compact = compact,
                         onClick = onCards
                     )
@@ -208,6 +232,34 @@ fun TopBar(
 
         Spacer(Modifier.height(if (compact) 4.dp else 6.dp))
         PlayersStrip(engine, compact)
+    }
+}
+
+@Composable
+private fun ModeChip(
+    label: String,
+    accent: Color,
+    icon: androidx.compose.ui.graphics.vector.ImageVector? = null
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .clip(RoundedCornerShape(6.dp))
+            .background(accent.copy(alpha = 0.10f))
+            .border(1.dp, accent.copy(alpha = 0.55f), RoundedCornerShape(6.dp))
+            .padding(horizontal = 7.dp, vertical = 3.dp)
+    ) {
+        if (icon != null) {
+            Icon(icon, contentDescription = null, tint = accent, modifier = Modifier.size(10.dp))
+            Spacer(Modifier.width(3.dp))
+        }
+        Text(
+            label,
+            color = accent,
+            fontSize = 7.5.sp,
+            fontWeight = FontWeight.Black,
+            letterSpacing = 1.1.sp
+        )
     }
 }
 
@@ -360,6 +412,16 @@ fun BottomBar(
                         fontWeight = FontWeight.Black,
                         maxLines = 1
                     )
+                    val fort = engine.fortificationOf(selectedTerritory)
+                    if (fort != Fortification.NENHUMA) {
+                        Text(
+                            "${fort.badge.uppercase()}  •  BÔNUS DEFENSIVO ATIVO",
+                            color = TacticalTeal,
+                            fontSize = if (compact) 7.sp else 8.sp,
+                            fontWeight = FontWeight.Black,
+                            maxLines = 1
+                        )
+                    }
                 } else {
                     Text(
                         "COMANDO DE CAMPO",

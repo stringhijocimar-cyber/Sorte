@@ -14,6 +14,9 @@ import com.sorte.war.data.ScreenOrientationMode
 import com.sorte.war.data.SaveInfo
 import com.sorte.war.data.StatsStorage
 import com.sorte.war.model.Difficulty
+import com.sorte.war.model.GameMode
+import com.sorte.war.model.RoundReport
+import com.sorte.war.model.TacticalCard
 import com.sorte.war.engine.Ai
 import com.sorte.war.engine.GameEngine
 import com.sorte.war.model.Avatar
@@ -25,7 +28,7 @@ import com.sorte.war.model.SetupMode
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-enum class Screen { HOME, NEW_GAME, STATS, HOW_TO_PLAY, GAME }
+enum class Screen { HOME, NEW_GAME, STATS, HOW_TO_PLAY, ARSENAL, GAME }
 
 /** Relatório narrativo do comandante entregue ao início da rodada do jogador. */
 data class CommanderReport(
@@ -103,6 +106,14 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     var commanderReport by mutableStateOf<CommanderReport?>(null)
         private set
 
+    /** Relatório do Alto Comando da última rodada completa. */
+    var roundReport by mutableStateOf<RoundReport?>(null)
+        private set
+
+    /** Relato do efeito da última carta tática jogada. */
+    var tacticalMessage by mutableStateOf<String?>(null)
+        private set
+
     /** Mostra o sorteio de dados que define quem começa. */
     var showStartRoll by mutableStateOf(false)
         private set
@@ -150,7 +161,8 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         humanAvatarId: Int = 0,
         difficulty: Difficulty = Difficulty.VETERANO,
         setupMode: SetupMode = SetupMode.DADOS,
-        chooseObjective: Boolean = true
+        chooseObjective: Boolean = true,
+        mode: GameMode = GameMode.CLASSICO
     ) {
         val palette = PlayerPalette.ordered
         val humanColor = palette[humanColorIndex.coerceIn(0, palette.size - 1)]
@@ -176,7 +188,8 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
             playerConfigs = configs,
             difficulty = difficulty,
             setupMode = setupMode,
-            objectiveChoices = if (chooseObjective) 3 else 1
+            objectiveChoices = if (chooseObjective) 3 else 1,
+            mode = mode
         )
         showStartRoll = setupMode == SetupMode.DADOS
         statsStore.rememberProfile(humanName.ifBlank { "Comandante" }, humanAvatarId)
@@ -186,6 +199,8 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         showAdvanceDialog = false
         fortifyTarget = null
         commanderReport = null
+        roundReport = null
+        tacticalMessage = null
         endSoundPlayed = false
         humanTerritoriesBeforeAi = emptySet()
         statusMessage = "Sua vez, Comandante — distribua seus reforços."
@@ -209,6 +224,8 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         showAdvanceDialog = false
         fortifyTarget = null
         commanderReport = null
+        roundReport = null
+        tacticalMessage = null
         endSoundPlayed = false
         humanTerritoriesBeforeAi = emptySet()
         statusMessage = if (e.currentPlayer.isHuman)
@@ -245,7 +262,34 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     fun closeCards() { showCards = false }
     fun openObjective() { showObjective = true; sound.play(Sfx.CLICK) }
     fun closeObjective() { showObjective = false }
-    fun dismissReport() { commanderReport = null; bump() }
+    fun dismissReport() { commanderReport = null; roundReport = null; bump() }
+
+    fun dismissTacticalMessage() { tacticalMessage = null; bump() }
+
+    /**
+     * Joga uma carta tática. Os parâmetros de alvo dependem da carta e são
+     * validados pelo motor — aqui só repassamos o que o jogador escolheu.
+     */
+    fun playTactical(
+        card: TacticalCard,
+        primary: Int? = null,
+        secondary: Int? = null,
+        amount: Int = 3,
+        targetPlayer: Int? = null
+    ) {
+        val e = engine ?: return
+        if (!e.currentPlayer.isHuman || aiRunning) return
+        val report = e.playTactical(card, primary, secondary, amount, targetPlayer)
+        if (report == null) {
+            statusMessage = e.tacticalBlockReason(card) ?: "Não foi possível usar esta carta."
+            bump(); return
+        }
+        tacticalMessage = report
+        statusMessage = report
+        sound.play(Sfx.CONQUER, 0.55f)
+        persist()
+        bump()
+    }
 
     // ---------------------------------------------------------------------
     // Interação com o mapa
@@ -442,6 +486,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         if (e.winnerId != null) return
         if (!e.currentPlayer.isHuman) return
         if (humanTerritoriesBeforeAi.isEmpty()) {
+            roundReport = e.lastRoundReport
             statusMessage = "Sua vez, Comandante."
             return
         }
@@ -453,6 +498,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
             val enemyName = if (enemy in e.players.indices) e.players[enemy].name else "inimigo"
             t.name to enemyName
         }
+        roundReport = e.lastRoundReport
         val flavor = if (lost.isEmpty()) HOLD_MESSAGES.random() else LOSS_MESSAGES.random()
         commanderReport = CommanderReport(
             lost = lost,

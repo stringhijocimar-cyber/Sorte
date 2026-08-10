@@ -1,5 +1,13 @@
 package com.sorte.war.ui.components
 
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -42,6 +50,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -60,20 +70,73 @@ import com.sorte.war.ui.theme.Gold
 import com.sorte.war.ui.theme.NightNavy
 import com.sorte.war.ui.theme.PanelNavy
 import com.sorte.war.ui.theme.TextSecondary
+import kotlin.math.PI
 import kotlin.math.roundToInt
+import kotlin.math.sin
 
-/** Uma face de dado desenhada com pips. */
+/**
+ * Dado com lançamento em 3D: sobe, gira nos três eixos, desacelera e cai com
+ * um pequeno impacto antes de revelar a face.
+ *
+ * Enquanto [rolling] for verdadeiro o dado mostra faces aleatórias; ao virar
+ * falso, a mola de aterrissagem dá o solavanco e o valor real aparece. O ciclo
+ * inteiro leva algo entre 700 e 1200 ms.
+ */
 @Composable
-fun DieFace(value: Int, win: Boolean?, size: Int = 44) {
+fun DieFace(
+    value: Int,
+    win: Boolean?,
+    size: Int = 44,
+    rolling: Boolean = false,
+    index: Int = 0
+) {
+    val spin by rememberInfiniteTransition(label = "die-spin").animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(560, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "spin"
+    )
+
+    // 1 no ar, 0 pousado — a mola subamortecida produz o quique da queda.
+    val landing by animateFloatAsState(
+        targetValue = if (rolling) 1f else 0f,
+        animationSpec = spring(dampingRatio = 0.45f, stiffness = 300f),
+        label = "die-landing"
+    )
+
+    val density = LocalDensity.current.density
+    val arc = sin((spin * PI).toFloat())
+    val airborne = landing.coerceIn(0f, 1f)
+    // sobra da mola quando passa do ponto: vira compressão no impacto
+    val recoil = (landing - airborne).coerceIn(-1f, 1f)
+
     val bg = when (win) {
         true -> Color(0xFF2E7D32)
         false -> Color(0xFF8E2A2A)
         null -> Color(0xFFF5F0E6)
     }
     val pip = if (win == null) Color(0xFF20242C) else Color.White
+    val shownValue = if (rolling) ((spin * 6f).toInt() + index) % 6 + 1 else value
+
     Box(
         modifier = Modifier
             .size(size.dp)
+            .graphicsLayer {
+                rotationX = spin * 720f * airborne + index * 6f * airborne
+                rotationY = spin * 1080f * airborne
+                rotationZ = spin * 360f * airborne - recoil * 8f
+                translationY = -arc * size * 0.55f * airborne
+                val pop = 1f + 0.10f * arc * airborne - recoil * 0.20f
+                scaleX = pop
+                scaleY = pop + recoil * 0.10f
+                cameraDistance = 10f * density
+                shadowElevation = 2f + 12f * airborne
+                shape = RoundedCornerShape(10.dp)
+                clip = false
+            }
             .background(bg, RoundedCornerShape(10.dp))
             .border(1.5.dp, Color(0x33000000), RoundedCornerShape(10.dp)),
         contentAlignment = Alignment.Center
@@ -85,7 +148,7 @@ fun DieFace(value: Int, win: Boolean?, size: Int = 44) {
             val c = w * 0.5f
             val b = w * 0.78f
             fun dot(x: Float, y: Float) = drawCircle(pip, r, Offset(x, y))
-            when (value) {
+            when (shownValue) {
                 1 -> dot(c, c)
                 2 -> { dot(a, a); dot(b, b) }
                 3 -> { dot(a, a); dot(c, c); dot(b, b) }
@@ -106,21 +169,16 @@ fun BattleDialog(
     onDismiss: () -> Unit
 ) {
     var revealed by remember(result) { mutableStateOf(false) }
-    var tick by remember(result) { mutableIntStateOf(0) }
 
     LaunchedEffect(result) {
         revealed = false
-        tick = 0
         sound?.play(Sfx.DICE)
-        repeat(9) { delay(90); tick++ }
+        delay(950)
         revealed = true
         sound?.play(Sfx.CANNON)
         sound?.play(Sfx.GUNFIRE, 0.8f)
         if (result.conquered) { delay(220); sound?.play(Sfx.CONQUER) }
     }
-
-    fun faceFor(actual: Int, index: Int): Int =
-        if (revealed) actual else ((tick * 7 + index * 13 + actual) % 6) + 1
 
     AlertDialog(
         onDismissRequest = { if (revealed) onDismiss() },
@@ -146,7 +204,7 @@ fun BattleDialog(
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     result.attackerDice.forEachIndexed { i, v ->
                         val win = if (revealed) winFor(result.attackerDice, result.defenderDice, i, true) else null
-                        DieFace(faceFor(v, i), win)
+                        DieFace(v, win, rolling = !revealed, index = i)
                     }
                 }
                 Spacer(Modifier.height(14.dp))
@@ -155,7 +213,7 @@ fun BattleDialog(
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     result.defenderDice.forEachIndexed { i, v ->
                         val win = if (revealed) winFor(result.attackerDice, result.defenderDice, i, false) else null
-                        DieFace(faceFor(v, i + 3), win)
+                        DieFace(v, win, rolling = !revealed, index = i + 3)
                     }
                 }
                 Spacer(Modifier.height(16.dp))
@@ -164,6 +222,20 @@ fun BattleDialog(
                         "Baixas — atacante: ${result.attackerLosses}   |   defensor: ${result.defenderLosses}",
                         color = TextSecondary, style = MaterialTheme.typography.bodyMedium
                     )
+                    if (result.fortificationLevel > 0) {
+                        Spacer(Modifier.height(6.dp))
+                        val fort = when (result.fortificationLevel) {
+                            1 -> "POSTO AVANÇADO"
+                            2 -> "BUNKER"
+                            else -> "FORTALEZA"
+                        }
+                        Text(
+                            "$fort: +1 em ${result.fortificationLevel} dado(s) de defesa",
+                            color = Color(0xFF7FD4FF),
+                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.labelLarge
+                        )
+                    }
                     if (result.conquered) {
                         Spacer(Modifier.height(8.dp))
                         Text("Vitória! O território agora é seu.", color = Color(0xFF7CF5A0), fontWeight = FontWeight.Bold)
@@ -245,7 +317,7 @@ fun FortifyDialog(fromName: String, toName: String, maxMovable: Int, onConfirm: 
 }
 
 @Composable
-fun ObjectiveDialog(description: String, onClose: () -> Unit) {
+fun ObjectiveDialog(objective: com.sorte.war.model.Objective?, onClose: () -> Unit) {
     AlertDialog(
         onDismissRequest = onClose,
         containerColor = PanelNavy,
@@ -256,70 +328,15 @@ fun ObjectiveDialog(description: String, onClose: () -> Unit) {
             ) { Text("Entendi", fontWeight = FontWeight.Bold) }
         },
         title = { Text("Seu objetivo secreto", color = Gold, fontWeight = FontWeight.Bold) },
-        text = { Text(description, color = Color.White, style = MaterialTheme.typography.bodyLarge) }
-    )
-}
-
-@Composable
-fun CardsDialog(
-    cards: List<GameCard>,
-    canTradeNow: Boolean,
-    nextBonus: Int,
-    isValidSet: (List<GameCard>) -> Boolean,
-    onTrade: (List<GameCard>) -> Unit,
-    onClose: () -> Unit
-) {
-    val selected = remember { mutableStateListOf<Int>() }
-    val chosen = selected.map { cards[it] }
-    val valid = chosen.size == 3 && isValidSet(chosen)
-
-    AlertDialog(
-        onDismissRequest = onClose,
-        containerColor = PanelNavy,
-        confirmButton = {
-            Button(
-                onClick = { if (valid) { onTrade(chosen); selected.clear() } },
-                enabled = valid && canTradeNow,
-                colors = ButtonDefaults.buttonColors(containerColor = Gold, contentColor = NightNavy)
-            ) { Text("Trocar (+$nextBonus)", fontWeight = FontWeight.Bold) }
-        },
-        dismissButton = { TextButton(onClick = onClose) { Text("Fechar", color = TextSecondary) } },
-        title = { Text("Suas cartas (${cards.size})", color = Gold, fontWeight = FontWeight.Bold) },
         text = {
             Column {
-                if (cards.isEmpty()) {
-                    Text("Você ainda não possui cartas. Conquiste um território para receber uma.", color = TextSecondary)
-                } else {
-                    Text(
-                        "Selecione 3 cartas: três iguais, uma de cada símbolo, ou usando coringa.",
-                        color = TextSecondary, style = MaterialTheme.typography.bodyMedium
-                    )
-                    Spacer(Modifier.height(10.dp))
-                    // Cartas em grade, desenhadas como as do tabuleiro
-                    cards.chunked(3).forEachIndexed { rowIdx, rowCards ->
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
-                        ) {
-                            rowCards.forEachIndexed { colIdx, card ->
-                                val i = rowIdx * 3 + colIdx
-                                val isSel = i in selected
-                                WarCard(
-                                    card = card,
-                                    selected = isSel,
-                                    modifier = Modifier.clickableNoRipple {
-                                        if (isSel) selected.remove(i)
-                                        else if (selected.size < 3) selected.add(i)
-                                    }
-                                )
-                            }
-                        }
-                    }
-                    if (!canTradeNow) {
-                        Spacer(Modifier.height(8.dp))
-                        Text("A troca só é possível na fase de reforço.", color = Color(0xFFFFB74D), style = MaterialTheme.typography.labelSmall)
-                    }
-                }
+                ObjectiveArt(objective)
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    objective?.description ?: "",
+                    color = Color.White,
+                    style = MaterialTheme.typography.bodyLarge
+                )
             }
         }
     )

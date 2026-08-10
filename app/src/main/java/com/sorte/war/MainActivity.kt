@@ -17,6 +17,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.sorte.war.data.ScreenOrientationMode
 import com.sorte.war.ui.GameViewModel
 import com.sorte.war.ui.Screen
+import com.sorte.war.ui.screens.ArsenalScreen
 import com.sorte.war.ui.screens.GameScreen
 import com.sorte.war.ui.screens.HomeScreen
 import com.sorte.war.ui.screens.HowToPlayScreen
@@ -56,6 +57,7 @@ fun WarApp(vm: GameViewModel = viewModel()) {
         Screen.NEW_GAME -> NewGameScreen(vm)
         Screen.STATS -> StatsScreen(vm)
         Screen.HOW_TO_PLAY -> HowToPlayScreen(vm)
+        Screen.ARSENAL -> ArsenalScreen(vm)
         Screen.GAME -> GameScreen(vm)
     }
 }

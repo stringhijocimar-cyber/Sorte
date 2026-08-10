@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Public
+import androidx.compose.material.icons.filled.Style
 import androidx.compose.material.icons.filled.ScreenRotation
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
@@ -259,6 +260,15 @@ fun HomeScreen(vm: GameViewModel) {
                 subtitle = "Veja seu desempenho global",
                 accent = Color(0xFF8AA0B3),
                 onClick = { vm.goTo(Screen.STATS) }
+            )
+            Spacer(Modifier.height(9.dp))
+
+            PremiumMenuButton(
+                icon = Icons.Filled.Style,
+                title = "ARSENAL",
+                subtitle = "As 21 cartas ilustradas",
+                accent = TacticalTeal,
+                onClick = { vm.goTo(Screen.ARSENAL) }
             )
             Spacer(Modifier.height(9.dp))
 

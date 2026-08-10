@@ -299,14 +299,20 @@ private fun DrawScope.drawLabels(
         val ownerColor = if (owner >= 0) Color(engine.players[owner].colorArgb) else Color.Gray
         val armies = engine.armiesOf[t.id]
 
-        // fortificação conforme o contingente
-        val level = when {
-            armies >= 12 -> 3
-            armies >= 8 -> 2
-            armies >= 4 -> 1
-            else -> 0
+        // fortificação conforme o contingente (mesmos limiares da regra tática)
+        val fortification = com.sorte.war.model.Fortification.forArmies(armies)
+        val level = fortification.level
+        if (level > 0) {
+            drawStructure(level, Offset(c.x, c.y - 13f * s), s, ownerColor)
+            // no modo tático o selo dourado marca que a defesa está reforçada
+            if (engine.tactical) {
+                drawCircle(
+                    Color(0xFFE8B85A),
+                    radius = 2.2f * s,
+                    center = Offset(c.x + 11f * s, c.y - 15f * s)
+                )
+            }
         }
-        if (level > 0) drawStructure(level, Offset(c.x, c.y - 13f * s), s, ownerColor)
 
         drawContext.canvas.nativeCanvas.drawText(t.name, c.x, c.y - 15f * s, namePaint)
 

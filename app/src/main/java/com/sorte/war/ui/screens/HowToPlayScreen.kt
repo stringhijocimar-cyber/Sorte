@@ -105,6 +105,36 @@ fun HowToPlayScreen(vm: GameViewModel) {
         )
 
         Spacer(Modifier.height(8.dp))
+        Text(
+            "MODOS DE JOGO",
+            color = TextSecondary, fontWeight = FontWeight.Bold, letterSpacing = 2.sp
+        )
+        Spacer(Modifier.height(8.dp))
+        ModeCard(
+            "MODO CLÁSSICO",
+            "As regras do tabuleiro, exatamente como descritas acima. Nada de " +
+                "fortificações com efeito, cartas táticas ou momentum."
+        )
+        ModeCard(
+            "MODO TÁTICO",
+            "Tudo do clássico, mais quatro camadas:\n\n" +
+                "• FORTIFICAÇÕES — o contingente define o nível do território: " +
+                "5 a 7 vira Posto Avançado, 8 a 11 vira Bunker e 12 ou mais vira " +
+                "Fortaleza. Cada nível soma +1 a um dado de defesa (nunca acima de 6) " +
+                "e o nível cai sozinho se as tropas caírem.\n\n" +
+                "• MOMENTUM — conquistar 2 territórios num turno rende uma carta " +
+                "tática; 3, 4 ou 5+ conquistas rendem +1, +2 ou +3 exércitos no turno " +
+                "seguinte, no máximo +3.\n\n" +
+                "• CARTAS TÁTICAS — um segundo baralho, separado das cartas de " +
+                "território. Abra CARTAS na barra superior e use a aba TÁTICAS. Cada " +
+                "carta diz em que fase funciona e, quando não puder ser usada, o " +
+                "motivo aparece na tela. A CPU também recebe e usa essas cartas.\n\n" +
+                "• RELATÓRIO DO ALTO COMANDO — ao fim de cada rodada completa, um " +
+                "balanço com conquistas, perdas, baixas causadas e sofridas, " +
+                "fortificações e momentum de cada exército."
+        )
+
+        Spacer(Modifier.height(14.dp))
         Text("BÔNUS DE CONTINENTE", color = TextSecondary, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
         Spacer(Modifier.height(8.dp))
         Column(
@@ -138,6 +168,26 @@ fun HowToPlayScreen(vm: GameViewModel) {
             color = TextSecondary, style = MaterialTheme.typography.bodyMedium
         )
         Spacer(Modifier.height(24.dp))
+    }
+}
+
+@Composable
+private fun ModeCard(title: String, body: String) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 10.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(PanelNavy)
+            .padding(14.dp)
+    ) {
+        Text(
+            title,
+            color = Gold, fontWeight = FontWeight.Black,
+            fontSize = 12.sp, letterSpacing = 1.4.sp
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(body, color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
     }
 }
 
