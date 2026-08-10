@@ -88,6 +88,65 @@ fun CardArtBanner(
     }
 }
 
+/**
+ * Missão de campanha: pública, com recompensa ao ser cumprida. Nunca dá a
+ * vitória — essa continua vindo do objetivo secreto ou da eliminação.
+ */
+@Composable
+fun MissionPanel(mission: TacticalMedal, done: Boolean, modifier: Modifier = Modifier) {
+    val accent = if (done) TacticalGreen else Gold
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(accent.copy(alpha = 0.08f))
+            .border(1.dp, accent.copy(alpha = 0.55f), RoundedCornerShape(12.dp))
+            .padding(12.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(width = 40.dp, height = 54.dp)
+                    .clip(RoundedCornerShape(7.dp))
+                    .border(1.dp, accent.copy(alpha = 0.7f), RoundedCornerShape(7.dp))
+            ) {
+                Image(
+                    painter = painterResource(id = CardArt.of(mission).art),
+                    contentDescription = mission.title,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    if (done) "MISSÃO CUMPRIDA" else "MISSÃO DE CAMPANHA",
+                    color = accent, fontSize = 8.sp,
+                    fontWeight = FontWeight.Black, letterSpacing = 1.3.sp
+                )
+                Text(
+                    mission.title.uppercase(),
+                    color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Black
+                )
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        Text(mission.requirement, color = TextSecondary, fontSize = 11.sp)
+        Spacer(Modifier.height(4.dp))
+        Text(
+            "Recompensa: ${mission.rewardText}",
+            color = accent, fontSize = 10.sp, fontWeight = FontWeight.Bold
+        )
+        if (!done) {
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "Cumpri-la dá vantagem, não a vitória.",
+                color = TextSecondary.copy(alpha = 0.8f), fontSize = 9.sp
+            )
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // TELA DE CARTAS — abas TERRITÓRIO e TÁTICAS
 // ---------------------------------------------------------------------------
