@@ -10,6 +10,7 @@ import com.sorte.war.model.Objectives
 import com.sorte.war.model.Phase
 import com.sorte.war.model.Player
 import com.sorte.war.model.PlayerPalette
+import com.sorte.war.model.SetupMode
 import kotlin.random.Random
 
 /**
@@ -20,6 +21,9 @@ import kotlin.random.Random
 class GameEngine(
     playerConfigs: List<PlayerConfig>,
     val difficulty: Difficulty = Difficulty.VETERANO,
+    val setupMode: SetupMode = SetupMode.DADOS,
+    /** Quantas cartas de objetivo o jogador humano recebe para escolher. */
+    private val objectiveChoices: Int = 1,
     private val rng: Random = Random(System.nanoTime()),
     skipSetup: Boolean = false
 ) {
@@ -71,6 +75,21 @@ class GameEngine(
     private val discardPile = mutableListOf<Card>()
     private var setsTraded = 0
 
+    /** Dado tirado por cada exército no sorteio inicial (vazio no modo aleatório). */
+    var initialRolls: IntArray = IntArray(0)
+        private set
+
+    /** Índice de quem abriu a partida (vencedor do sorteio). */
+    var startingPlayer: Int = 0
+        private set
+
+    /**
+     * Cartas de objetivo oferecidas ao jogador humano. Enquanto não estiver
+     * vazia, a UI mostra as cartas para ele escolher uma.
+     */
+    var objectiveOptions: List<Objective> = emptyList()
+        private set
+
     val currentPlayer: Player get() = players[currentPlayerIndex]
 
     init {
@@ -78,6 +97,7 @@ class GameEngine(
             setupBoard()
             assignObjectives()
             buildCardDeck()
+            currentPlayerIndex = startingPlayer
             startTurn()
         }
     }
@@ -87,10 +107,27 @@ class GameEngine(
     // ---------------------------------------------------------------------
 
     private fun setupBoard() {
+        // Quem começa: no modo DADOS, o maior dado (com desempate por nova rolagem).
+        startingPlayer = if (setupMode == SetupMode.DADOS) {
+            var rolls: IntArray
+            var winners: List<Int>
+            var guard = 0
+            do {
+                rolls = IntArray(players.size) { rng.nextInt(6) + 1 }
+                val best = rolls.max()
+                winners = rolls.indices.filter { rolls[it] == best }
+            } while (winners.size > 1 && guard++ < 20)
+            initialRolls = rolls
+            winners.first()
+        } else {
+            initialRolls = IntArray(0)
+            rng.nextInt(players.size)
+        }
+
         val ids = (0 until n).toMutableList().also { it.shuffle(rng) }
-        // Distribui territórios em rodízio entre os jogadores.
+        // Distribui territórios em rodízio, começando por quem venceu o sorteio.
         ids.forEachIndexed { index, tId ->
-            val p = index % players.size
+            val p = (startingPlayer + index) % players.size
             ownerOf[tId] = p
             armiesOf[tId] = 1
         }
@@ -113,10 +150,27 @@ class GameEngine(
         val deck = Objectives.buildDeck().shuffled(rng).toMutableList()
         val colorsInPlay = players.map { it.colorArgb }.toSet()
         for (p in players) {
-            var obj = deck.removeAt(0)
-            obj = sanitizeObjective(obj, p, colorsInPlay)
-            p.objective = obj
+            if (p.isHuman && objectiveChoices > 1) {
+                // Oferece algumas cartas; o objetivo só é definido na escolha.
+                val opts = ArrayList<Objective>(objectiveChoices)
+                repeat(objectiveChoices.coerceAtMost(deck.size)) {
+                    opts.add(sanitizeObjective(deck.removeAt(0), p, colorsInPlay))
+                }
+                objectiveOptions = opts
+                p.objective = opts.first()   // provisório, até a escolha
+            } else {
+                p.objective = sanitizeObjective(deck.removeAt(0), p, colorsInPlay)
+            }
         }
+    }
+
+    /** Confirma a carta de objetivo escolhida pelo jogador humano. */
+    fun chooseObjective(index: Int) {
+        val opts = objectiveOptions
+        if (opts.isEmpty()) return
+        val chosen = opts.getOrNull(index) ?: opts.first()
+        players.firstOrNull { it.isHuman }?.objective = chosen
+        objectiveOptions = emptyList()
     }
 
     private fun sanitizeObjective(

@@ -1,5 +1,17 @@
 package com.sorte.war.model
 
+/** Como os territórios e a ordem de jogo são definidos no início da partida. */
+enum class SetupMode(val label: String, val description: String) {
+    DADOS(
+        "Sorteio nos dados",
+        "Cada exército rola um dado; quem tirar o maior começa a partida."
+    ),
+    ALEATORIA(
+        "Totalmente aleatório",
+        "Territórios e ordem de jogo sorteados sem rolagem de dados."
+    )
+}
+
 /** Nível de dificuldade dos oponentes controlados pela CPU. */
 enum class Difficulty(
     val label: String,

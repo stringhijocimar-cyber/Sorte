@@ -19,6 +19,7 @@ import com.sorte.war.model.BattleResult
 import com.sorte.war.model.Card
 import com.sorte.war.model.Phase
 import com.sorte.war.model.PlayerPalette
+import com.sorte.war.model.SetupMode
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -86,6 +87,29 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     var commanderReport by mutableStateOf<CommanderReport?>(null)
         private set
 
+    /** Mostra o sorteio de dados que define quem começa. */
+    var showStartRoll by mutableStateOf(false)
+        private set
+
+    fun dismissStartRoll() {
+        showStartRoll = false
+        sound.play(Sfx.CLICK)
+        bump()
+        // se o sorteio deu a vez a uma CPU, ela começa assim que a escolha acabar
+        val e = engine
+        if (e != null && e.objectiveOptions.isEmpty() && !e.currentPlayer.isHuman) startAiRound()
+    }
+
+    /** Confirma a carta de objetivo escolhida pelo jogador. */
+    fun chooseObjective(index: Int) {
+        val e = engine ?: return
+        e.chooseObjective(index)
+        sound.play(Sfx.CONQUER, 0.6f)
+        persist()
+        bump()
+        if (!showStartRoll && !e.currentPlayer.isHuman) startAiRound()
+    }
+
     private var aiRunning = false
     private var humanTerritoriesBeforeAi: Set<Int> = emptySet()
     private var endSoundPlayed = false
@@ -107,7 +131,9 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         totalPlayers: Int,
         humanColorIndex: Int,
         humanAvatarId: Int = 0,
-        difficulty: Difficulty = Difficulty.VETERANO
+        difficulty: Difficulty = Difficulty.VETERANO,
+        setupMode: SetupMode = SetupMode.DADOS,
+        chooseObjective: Boolean = true
     ) {
         val palette = PlayerPalette.ordered
         val humanColor = palette[humanColorIndex.coerceIn(0, palette.size - 1)]
@@ -129,7 +155,13 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
                 )
             }
         }
-        engine = GameEngine(configs, difficulty)
+        engine = GameEngine(
+            playerConfigs = configs,
+            difficulty = difficulty,
+            setupMode = setupMode,
+            objectiveChoices = if (chooseObjective) 3 else 1
+        )
+        showStartRoll = setupMode == SetupMode.DADOS
         statsStore.rememberProfile(humanName.ifBlank { "Comandante" }, humanAvatarId)
         refreshStats()
         selectedTerritory = null

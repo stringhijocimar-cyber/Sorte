@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.sp
 import com.sorte.war.model.Avatar
 import com.sorte.war.model.Difficulty
 import com.sorte.war.model.PlayerPalette
+import com.sorte.war.model.SetupMode
 import com.sorte.war.ui.GameViewModel
 import com.sorte.war.ui.Screen
 import com.sorte.war.ui.components.AvatarPortrait
@@ -59,6 +60,8 @@ fun NewGameScreen(vm: GameViewModel) {
     var colorIndex by remember { mutableIntStateOf(0) }
     var avatarIndex by remember { mutableIntStateOf(vm.stats.favoriteAvatarId) }
     var difficulty by remember { mutableStateOf(Difficulty.VETERANO) }
+    var setupMode by remember { mutableStateOf(SetupMode.DADOS) }
+    var pickObjective by remember { mutableStateOf(true) }
 
     BackHandler { vm.goTo(Screen.HOME) }
 
@@ -230,6 +233,85 @@ fun NewGameScreen(vm: GameViewModel) {
             }
         }
 
+        Spacer(Modifier.height(14.dp))
+
+        SetupCard("Início da partida") {
+            SetupMode.entries.forEach { m ->
+                val sel = setupMode == m
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 3.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(if (sel) Gold.copy(alpha = 0.18f) else Color(0xFF1B2C44))
+                        .border(
+                            if (sel) 2.dp else 1.dp,
+                            if (sel) Gold else Color(0xFF2A3B54),
+                            RoundedCornerShape(12.dp)
+                        )
+                        .clickableNoRipple { setupMode = m }
+                        .padding(horizontal = 12.dp, vertical = 10.dp)
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            m.label,
+                            color = if (sel) Gold else Color.White,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            m.description,
+                            color = TextSecondary,
+                            style = MaterialTheme.typography.labelSmall
+                        )
+                    }
+                    if (sel) Icon(Icons.Filled.Check, contentDescription = null, tint = Gold)
+                }
+            }
+        }
+
+        Spacer(Modifier.height(14.dp))
+
+        SetupCard("Objetivo secreto") {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Color(0xFF1B2C44))
+                    .clickableNoRipple { pickObjective = !pickObjective }
+                    .padding(horizontal = 12.dp, vertical = 10.dp)
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        if (pickObjective) "Escolher entre 3 cartas" else "Sortear automaticamente",
+                        color = Color.White, fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        if (pickObjective)
+                            "Você recebe três cartas viradas e escolhe a sua missão."
+                        else "O jogo sorteia uma carta de objetivo para você.",
+                        color = TextSecondary, style = MaterialTheme.typography.labelSmall
+                    )
+                }
+                Box(
+                    modifier = Modifier
+                        .size(46.dp, 26.dp)
+                        .clip(RoundedCornerShape(13.dp))
+                        .background(if (pickObjective) Gold else Color(0xFF3A4C66)),
+                    contentAlignment = if (pickObjective) Alignment.CenterEnd else Alignment.CenterStart
+                ) {
+                    Box(
+                        Modifier
+                            .padding(3.dp)
+                            .size(20.dp)
+                            .clip(CircleShape)
+                            .background(Color.White)
+                    )
+                }
+            }
+        }
+
         Spacer(Modifier.height(20.dp))
 
         if (vm.saveInfo != null) {
@@ -249,7 +331,10 @@ fun NewGameScreen(vm: GameViewModel) {
                 .clip(RoundedCornerShape(16.dp))
                 .background(Gold)
                 .clickableNoRipple {
-                    vm.startGame(name, players, colorIndex, avatarIndex, difficulty)
+                    vm.startGame(
+                        name, players, colorIndex, avatarIndex,
+                        difficulty, setupMode, pickObjective
+                    )
                 }
                 .padding(horizontal = 18.dp)
         ) {

@@ -17,7 +17,9 @@ import com.sorte.war.ui.components.CardsDialog
 import com.sorte.war.ui.components.CommanderReportDialog
 import com.sorte.war.ui.components.FortifyDialog
 import com.sorte.war.ui.components.MapCanvas
+import com.sorte.war.ui.components.ObjectiveChoiceDialog
 import com.sorte.war.ui.components.ObjectiveDialog
+import com.sorte.war.ui.components.StartRollDialog
 import com.sorte.war.ui.components.TopBar
 import com.sorte.war.ui.components.VictoryDialog
 
@@ -79,6 +81,26 @@ fun GameScreen(vm: GameViewModel) {
 
     vm.commanderReport?.let { report ->
         CommanderReportDialog(report = report, onClose = { vm.dismissReport() })
+    }
+
+    // Sorteio de quem começa (modo "nos dados")
+    if (vm.showStartRoll && engine.initialRolls.isNotEmpty()) {
+        StartRollDialog(
+            players = engine.players,
+            rolls = engine.initialRolls,
+            startingPlayer = engine.startingPlayer,
+            sound = vm.sound,
+            onClose = { vm.dismissStartRoll() }
+        )
+    }
+
+    // Escolha da carta de objetivo
+    if (!vm.showStartRoll && engine.objectiveOptions.isNotEmpty()) {
+        ObjectiveChoiceDialog(
+            options = engine.objectiveOptions,
+            sound = vm.sound,
+            onChoose = { vm.chooseObjective(it) }
+        )
     }
 
     if (vm.showAdvanceDialog) {

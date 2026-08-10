@@ -98,6 +98,7 @@ fun MapCanvas(
         val s = baseScale(size) * userScale
         val proj = { x: Float, y: Float -> project(size, x, y) }
 
+        drawWatermark(size)
         drawOceanGrid(proj)
         drawRoutes(proj)
         drawLandmasses(engine, selectedTerritory, validTargets, s, proj)
@@ -122,6 +123,34 @@ private fun territoryPath(id: Int, project: (Float, Float) -> Offset): Path {
         path.close()
     }
     return path
+}
+
+/**
+ * Marca d'água do jogo: emblema de globo com espadas cruzadas, bem discreto,
+ * ancorado na tela (não acompanha o zoom do mapa).
+ */
+private fun DrawScope.drawWatermark(size: Size) {
+    val cx = size.width * 0.5f
+    val cy = size.height * 0.52f
+    val r = minOf(size.width, size.height) * 0.30f
+    val ink = Color(0xFF9FD4FF).copy(alpha = 0.055f)
+
+    // espadas cruzadas
+    val len = r * 1.35f
+    drawLine(ink, Offset(cx - len, cy + len), Offset(cx + len, cy - len), strokeWidth = r * 0.09f)
+    drawLine(ink, Offset(cx + len, cy + len), Offset(cx - len, cy - len), strokeWidth = r * 0.09f)
+
+    // globo
+    drawCircle(ink, radius = r, center = Offset(cx, cy), style = Stroke(width = r * 0.07f))
+    drawCircle(ink, radius = r * 0.62f, center = Offset(cx, cy), style = Stroke(width = r * 0.05f))
+    drawLine(ink, Offset(cx - r, cy), Offset(cx + r, cy), strokeWidth = r * 0.05f)
+
+    // paralelos
+    for (f in listOf(0.45f, 0.8f)) {
+        val rx = r * kotlin.math.sqrt(1f - f * f)
+        drawLine(ink, Offset(cx - rx, cy - r * f), Offset(cx + rx, cy - r * f), strokeWidth = r * 0.035f)
+        drawLine(ink, Offset(cx - rx, cy + r * f), Offset(cx + rx, cy + r * f), strokeWidth = r * 0.035f)
+    }
 }
 
 private fun DrawScope.drawOceanGrid(project: (Float, Float) -> Offset) {
