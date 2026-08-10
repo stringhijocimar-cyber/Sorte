@@ -1,74 +1,82 @@
 package com.sorte.war.model
 
-/** Estilo de elmo/toucado usado para desenhar o retrato do comandante. */
-enum class Headgear {
-    ELMO_GREGO, LOUROS, ELMO_PUNICO, NEMES, ELMO_CAVALEIRO, ELMO_ESTEPE,
-    TURBANTE, BICORNE, QUEPE, FAIXA, ELMO_CELTA, ELMO_CHINES
-}
+import androidx.annotation.DrawableRes
+import com.sorte.war.R
 
 /**
- * Comandantes históricos disponíveis como avatar do jogador.
- * Todos são figuras históricas consagradas, ao estilo dos jogos de estratégia.
+ * Comandantes disponíveis como avatar do jogador.
+ *
+ * Cada um é um retrato militar ilustrado, exibido recortado em círculo no
+ * menu, no HUD e no placar da partida.
+ *
+ * A ordem define o `avatarId` gravado nos saves — acrescente novos no fim
+ * para não deslocar os índices de partidas já salvas.
  */
 enum class Avatar(
     val commander: String,
-    val epithet: String,
-    val era: String,
-    val headgear: Headgear,
-    val skinArgb: Long,
+    val rankTitle: String,
+    val specialty: String,
+    @DrawableRes val portrait: Int,
     val accentArgb: Long
 ) {
-    ALEXANDRE(
-        "Alexandre", "o Grande", "Macedônia, séc. IV a.C.",
-        Headgear.ELMO_GREGO, 0xFFE0AC85, 0xFFD64545
+    VARGAS(
+        "Rafael Vargas", "Comandante-Geral",
+        "Veterano de campanhas em três continentes.",
+        R.drawable.avatar_01, 0xFFD9A63A
     ),
-    CESAR(
-        "Júlio César", "Imperador de Roma", "Roma, séc. I a.C.",
-        Headgear.LOUROS, 0xFFE3B48F, 0xFFC9A227
+    OKONKWO(
+        "Marcus Okonkwo", "Chefe de Operações",
+        "Especialista em incursões e assalto rápido.",
+        R.drawable.avatar_02, 0xFF4FB6B2
     ),
-    ANIBAL(
-        "Aníbal Barca", "Terror de Roma", "Cartago, séc. III a.C.",
-        Headgear.ELMO_PUNICO, 0xFFC98F63, 0xFF8E6BC4
+    REINHARDT(
+        "Otto Reinhardt", "General de Exército",
+        "Condecorado por defesa de posições críticas.",
+        R.drawable.avatar_03, 0xFFC0533F
     ),
-    CLEOPATRA(
-        "Cleópatra VII", "Rainha do Nilo", "Egito, séc. I a.C.",
-        Headgear.NEMES, 0xFFD9A277, 0xFF2FA8C4
+    KOVAC(
+        "Elena Kovac", "Oficial de Elite",
+        "Comanda unidades de reconhecimento avançado.",
+        R.drawable.avatar_04, 0xFF8E6BC4
     ),
-    JOANA(
-        "Joana d'Arc", "A Donzela", "França, séc. XV",
-        Headgear.ELMO_CAVALEIRO, 0xFFEFC6A6, 0xFFE8E2D4
+    GREY(
+        "Aldous Grey", "Almirante",
+        "Domina rotas marítimas e desembarques.",
+        R.drawable.avatar_05, 0xFF5D8FC7
     ),
-    GENGIS(
-        "Gengis Khan", "Senhor da Estepe", "Mongólia, séc. XIII",
-        Headgear.ELMO_ESTEPE, 0xFFD8AC7C, 0xFF7A5230
+    LIU(
+        "Liu Wei", "General de Divisão",
+        "Estrategista de longas campanhas terrestres.",
+        R.drawable.avatar_06, 0xFFD4633F
     ),
-    SALADINO(
-        "Saladino", "Sultão do Egito", "Egito e Síria, séc. XII",
-        Headgear.TURBANTE, 0xFFC98F63, 0xFF2E9E6B
+    AKSOY(
+        "Kaan Aksoy", "Comandante Tático",
+        "Opera em terreno hostil e linhas avançadas.",
+        R.drawable.avatar_07, 0xFFB98A3A
     ),
-    NAPOLEAO(
-        "Napoleão", "Imperador dos Franceses", "França, séc. XIX",
-        Headgear.BICORNE, 0xFFEFC6A6, 0xFF2A4C8F
+    MARCHETTI(
+        "Sofia Marchetti", "Comandante de Frota",
+        "Coordena forças combinadas em larga escala.",
+        R.drawable.avatar_08, 0xFF4A9E6B
     ),
-    CAXIAS(
-        "Duque de Caxias", "Patrono do Exército", "Brasil, séc. XIX",
-        Headgear.QUEPE, 0xFFE0AC85, 0xFF1F6B3A
+    FERRAZ(
+        "Diego Ferraz", "Oficial de Campo",
+        "Reage rápido e explora brechas inimigas.",
+        R.drawable.avatar_09, 0xFF3E8FA8
     ),
-    ZUMBI(
-        "Zumbi", "Líder dos Palmares", "Brasil, séc. XVII",
-        Headgear.FAIXA, 0xFF6B4430, 0xFFD9A227
-    ),
-    BOUDICA(
-        "Boudica", "Rainha dos Icenos", "Britânia, séc. I",
-        Headgear.ELMO_CELTA, 0xFFF0CBAD, 0xFFB8422F
-    ),
-    SUNTZU(
-        "Sun Tzu", "A Arte da Guerra", "China, séc. V a.C.",
-        Headgear.ELMO_CHINES, 0xFFE3BE8F, 0xFFC0392B
+    DIALLO(
+        "Amara Diallo", "Comandante Suprema",
+        "Lidera ofensivas decisivas até o domínio total.",
+        R.drawable.avatar_10, 0xFFC9A227
     );
 
     companion object {
         val all: List<Avatar> get() = entries
-        fun byId(id: Int): Avatar = entries.getOrElse(id) { ALEXANDRE }
+
+        /**
+         * Avatar de um índice salvo. Índices fora da faixa (de saves antigos,
+         * quando o elenco era outro) caem no primeiro comandante.
+         */
+        fun byId(id: Int): Avatar = entries.getOrElse(id) { entries.first() }
     }
 }

@@ -181,12 +181,16 @@ fun NewGameScreen(vm: GameViewModel) {
             Spacer(Modifier.height(8.dp))
             val chosen = Avatar.byId(avatarIndex)
             Text(
-                "${chosen.commander} — ${chosen.epithet}",
+                "${chosen.commander} — ${chosen.rankTitle}",
                 color = TextPrimary,
                 fontWeight = FontWeight.Bold,
                 style = MaterialTheme.typography.bodyMedium
             )
-            Text(chosen.era, color = TextSecondary, style = MaterialTheme.typography.labelSmall)
+            Text(
+                chosen.specialty,
+                color = TextSecondary,
+                style = MaterialTheme.typography.labelSmall
+            )
         }
 
         Spacer(Modifier.height(10.dp))
