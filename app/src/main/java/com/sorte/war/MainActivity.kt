@@ -1,5 +1,7 @@
 package com.sorte.war
 
+import android.app.Activity
+import android.content.pm.ActivityInfo
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -8,8 +10,11 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.sorte.war.data.ScreenOrientationMode
 import com.sorte.war.ui.GameViewModel
 import com.sorte.war.ui.Screen
 import com.sorte.war.ui.screens.GameScreen
@@ -36,6 +41,16 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun WarApp(vm: GameViewModel = viewModel()) {
+    // Aplica a orientação de tela escolhida pelo jogador.
+    val context = LocalContext.current
+    LaunchedEffect(vm.orientationMode) {
+        (context as? Activity)?.requestedOrientation = when (vm.orientationMode) {
+            ScreenOrientationMode.RETRATO -> ActivityInfo.SCREEN_ORIENTATION_USER_PORTRAIT
+            ScreenOrientationMode.PAISAGEM -> ActivityInfo.SCREEN_ORIENTATION_USER_LANDSCAPE
+            ScreenOrientationMode.AUTOMATICO -> ActivityInfo.SCREEN_ORIENTATION_FULL_USER
+        }
+    }
+
     when (vm.screen) {
         Screen.HOME -> HomeScreen(vm)
         Screen.NEW_GAME -> NewGameScreen(vm)

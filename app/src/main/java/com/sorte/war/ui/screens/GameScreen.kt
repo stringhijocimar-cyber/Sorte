@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import com.sorte.war.model.Phase
 import com.sorte.war.ui.GameViewModel
 import com.sorte.war.ui.components.AdvanceDialog
@@ -39,11 +40,16 @@ fun GameScreen(vm: GameViewModel) {
         else -> emptySet()
     }
 
+    // Em paisagem o HUD fica mais enxuto para sobrar mais espaço ao mapa.
+    val landscape = LocalConfiguration.current.orientation ==
+        android.content.res.Configuration.ORIENTATION_LANDSCAPE
+
     Column(modifier = Modifier.fillMaxSize().systemBarsPadding()) {
         TopBar(
             engine = engine,
             refresh = refresh,
             soundEnabled = vm.soundEnabled,
+            compact = landscape,
             onToggleSound = { vm.toggleSound() },
             onObjective = { vm.openObjective() },
             onCards = { vm.openCards() }
@@ -63,6 +69,7 @@ fun GameScreen(vm: GameViewModel) {
             engine = engine,
             refresh = refresh,
             statusMessage = vm.statusMessage,
+            compact = landscape,
             onNextPhase = { vm.nextPhase() }
         )
     }

@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Public
+import androidx.compose.material.icons.filled.ScreenRotation
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -45,6 +46,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.sorte.war.data.ScreenOrientationMode
 import com.sorte.war.model.Avatar
 import com.sorte.war.ui.GameViewModel
 import com.sorte.war.ui.Screen
@@ -210,6 +212,59 @@ fun HomeScreen(vm: GameViewModel) {
                 content = Color.White,
                 onClick = { vm.goTo(Screen.HOW_TO_PLAY) }
             )
+
+            Spacer(Modifier.height(16.dp))
+
+            // ---------------- Orientação da tela ----------------
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(Color(0xFF132033))
+                    .padding(14.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Filled.ScreenRotation, contentDescription = null,
+                        tint = TextSecondary, modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        "ORIENTAÇÃO DA TELA",
+                        color = TextSecondary, fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp
+                    )
+                }
+                Spacer(Modifier.height(10.dp))
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    ScreenOrientationMode.entries.forEach { m ->
+                        val sel = vm.orientationMode == m
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(11.dp))
+                                .background(if (sel) Gold else Color(0xFF22344D))
+                                .clickableNoRipple { vm.setOrientation(m) }
+                                .padding(vertical = 10.dp)
+                        ) {
+                            Text(
+                                m.label,
+                                color = if (sel) NightNavy else Color.White,
+                                fontWeight = FontWeight.Bold, fontSize = 12.sp
+                            )
+                        }
+                    }
+                }
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    vm.orientationMode.description,
+                    color = TextSecondary, fontSize = 11.sp
+                )
+            }
 
             Spacer(Modifier.height(20.dp))
             Text(

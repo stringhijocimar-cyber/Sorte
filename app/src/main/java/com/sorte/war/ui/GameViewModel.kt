@@ -7,8 +7,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.sorte.war.data.AppSettings
 import com.sorte.war.data.GameStorage
 import com.sorte.war.data.PlayerStats
+import com.sorte.war.data.ScreenOrientationMode
 import com.sorte.war.data.SaveInfo
 import com.sorte.war.data.StatsStorage
 import com.sorte.war.model.Difficulty
@@ -35,9 +37,23 @@ data class CommanderReport(
 
 class GameViewModel(app: Application) : AndroidViewModel(app) {
 
-    val sound: SoundManager by lazy { SoundManager(getApplication<Application>()) }
+    val sound: SoundManager by lazy {
+        SoundManager(getApplication<Application>()).also { it.enabled = soundEnabled }
+    }
     private val storage = GameStorage(getApplication<Application>())
     private val statsStore = StatsStorage(getApplication<Application>())
+    private val settings = AppSettings(getApplication<Application>())
+
+    /** Orientação de tela escolhida pelo jogador. */
+    var orientationMode by mutableStateOf(settings.orientation)
+        private set
+
+    fun setOrientation(mode: ScreenOrientationMode) {
+        orientationMode = mode
+        settings.orientation = mode
+        sound.play(Sfx.CLICK)
+        bump()
+    }
 
     /** Resumo da partida salva (null se não houver). */
     var saveInfo by mutableStateOf<SaveInfo?>(storage.info())
@@ -60,7 +76,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     var refresh by mutableIntStateOf(0)
         private set
 
-    var soundEnabled by mutableStateOf(true)
+    var soundEnabled by mutableStateOf(settings.soundEnabled)
         private set
 
     private val humanId = 0
@@ -119,6 +135,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     fun toggleSound() {
         soundEnabled = !soundEnabled
         sound.enabled = soundEnabled
+        settings.soundEnabled = soundEnabled
         bump()
     }
 

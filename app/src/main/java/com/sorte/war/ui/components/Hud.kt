@@ -54,6 +54,7 @@ fun TopBar(
     engine: GameEngine,
     refresh: Int,
     soundEnabled: Boolean,
+    compact: Boolean = false,
     onToggleSound: () -> Unit,
     onObjective: () -> Unit,
     onCards: () -> Unit
@@ -65,12 +66,12 @@ fun TopBar(
         modifier = Modifier
             .fillMaxWidth()
             .background(PanelNavy)
-            .padding(horizontal = 12.dp, vertical = 8.dp)
+            .padding(horizontal = 12.dp, vertical = if (compact) 4.dp else 8.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             AvatarPortrait(
                 avatar = com.sorte.war.model.Avatar.byId(cur.avatarId),
-                sizeDp = 34,
+                sizeDp = if (compact) 26 else 34,
                 ringColor = Color(cur.colorArgb)
             )
             Spacer(Modifier.width(8.dp))
@@ -94,8 +95,8 @@ fun TopBar(
                 HudIconButton(Icons.Filled.Style, "Cartas (${cur.cards.size})", onCards)
             }
         }
-        Spacer(Modifier.height(8.dp))
-        PlayersStrip(engine)
+        Spacer(Modifier.height(if (compact) 4.dp else 8.dp))
+        PlayersStrip(engine, compact)
     }
 }
 
@@ -120,7 +121,7 @@ private fun HudIconButton(icon: androidx.compose.ui.graphics.vector.ImageVector,
  * (de 42) e o total de tropas em campo.
  */
 @Composable
-private fun PlayersStrip(engine: GameEngine) {
+private fun PlayersStrip(engine: GameEngine, compact: Boolean = false) {
     val total = com.sorte.war.model.MapData.territories.size
     Row(
         modifier = Modifier
@@ -143,11 +144,11 @@ private fun PlayersStrip(engine: GameEngine) {
                         if (active) Gold else Color(0x22FFFFFF),
                         RoundedCornerShape(14.dp)
                     )
-                    .padding(horizontal = 7.dp, vertical = 5.dp)
+                    .padding(horizontal = 7.dp, vertical = if (compact) 3.dp else 5.dp)
             ) {
                 AvatarPortrait(
                     avatar = com.sorte.war.model.Avatar.byId(p.avatarId),
-                    sizeDp = 26,
+                    sizeDp = if (compact) 20 else 26,
                     ringColor = Color(p.colorArgb)
                 )
                 Spacer(Modifier.width(6.dp))
@@ -185,6 +186,7 @@ fun BottomBar(
     engine: GameEngine,
     refresh: Int,
     statusMessage: String?,
+    compact: Boolean = false,
     onNextPhase: () -> Unit
 ) {
     @Suppress("UNUSED_EXPRESSION") refresh
@@ -202,7 +204,7 @@ fun BottomBar(
         modifier = Modifier
             .fillMaxWidth()
             .background(PanelNavy)
-            .padding(12.dp),
+            .padding(horizontal = 12.dp, vertical = if (compact) 6.dp else 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
@@ -217,7 +219,7 @@ fun BottomBar(
                 .clip(RoundedCornerShape(14.dp))
                 .background(if (enabled) Gold else Color(0xFF33465F))
                 .then(if (enabled) Modifier.clickableNoRipple(onNextPhase) else Modifier)
-                .padding(horizontal = 18.dp, vertical = 12.dp)
+                .padding(horizontal = 18.dp, vertical = if (compact) 8.dp else 12.dp)
         ) {
             Text(
                 actionLabel,
