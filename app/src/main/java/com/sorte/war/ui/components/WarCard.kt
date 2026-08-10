@@ -6,6 +6,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -27,8 +28,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.Image
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import com.sorte.war.model.Card
 import com.sorte.war.model.CardSymbol
+import com.sorte.war.model.ClassicCardArt
 import com.sorte.war.model.MapData
 
 private val CardBlack = Color(0xFF0A0D14)
@@ -52,6 +57,36 @@ fun WarCard(
 ) {
     val isJoker = card.symbol == CardSymbol.CORINGA
     val accent = if (isJoker) JokerGold else SymbolRed
+
+    // Enquanto o baralho ilustrado não estiver completo, a mão continua
+    // desenhada — misturar carta pintada com carta desenhada fica feio.
+    val painted = if (ClassicCardArt.isComplete(MapData.territories.size)) {
+        if (isJoker) ClassicCardArt.jokerArt else ClassicCardArt.of(card.territoryId)
+    } else null
+
+    if (painted != null) {
+        Box(
+            modifier = modifier
+                .width(width.dp)
+                .height(height.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(CardBlack)
+                .border(
+                    width = if (selected) 2.5.dp else 1.dp,
+                    color = if (selected) JokerGold else CardEdge,
+                    shape = RoundedCornerShape(10.dp)
+                )
+        ) {
+            Image(
+                painter = painterResource(id = painted),
+                contentDescription = if (isJoker) "Coringa"
+                else MapData.territory(card.territoryId).name,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+        return
+    }
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,

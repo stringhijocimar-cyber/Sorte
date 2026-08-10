@@ -45,6 +45,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.sorte.war.model.CardArt
 import com.sorte.war.model.CardFamily
+import com.sorte.war.model.ClassicCardArt
+import com.sorte.war.model.MapData
 import com.sorte.war.model.TacticalCard
 import com.sorte.war.model.TacticalMedal
 import com.sorte.war.ui.GameViewModel
@@ -144,15 +146,56 @@ fun ArsenalScreen(vm: GameViewModel) {
                 }
             }
 
-            Spacer(Modifier.height(10.dp))
-            Text(
-                "As cartas de território da partida continuam as do tabuleiro: " +
-                    "silhueta do país e símbolo (círculo, quadrado ou triângulo).",
-                color = TextSecondary.copy(alpha = 0.75f),
-                fontSize = 10.sp,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth()
-            )
+            // Cartas de território ilustradas
+            val total = MapData.territories.size
+            val ready = ClassicCardArt.availableTerritories(total)
+            if (ready.isNotEmpty()) {
+                Spacer(Modifier.height(18.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(width = 3.dp, height = 16.dp)
+                            .background(Gold, RoundedCornerShape(2.dp))
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        "TERRITÓRIOS",
+                        color = Gold, fontSize = 11.sp,
+                        fontWeight = FontWeight.Black, letterSpacing = 1.8.sp
+                    )
+                    Spacer(Modifier.weight(1f))
+                    Text(
+                        "${ready.size}/$total",
+                        color = TextSecondary, fontSize = 10.sp, fontWeight = FontWeight.Bold
+                    )
+                }
+                Spacer(Modifier.height(6.dp))
+                Box(Modifier.fillMaxWidth().height(1.dp).background(Divider))
+                Spacer(Modifier.height(9.dp))
+
+                (listOf(-1) + ready).chunked(3).forEach { row ->
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(9.dp),
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 9.dp)
+                    ) {
+                        row.forEach { id ->
+                            TerritoryThumb(id = id, modifier = Modifier.weight(1f))
+                        }
+                        repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
+                    }
+                }
+
+                if (!ClassicCardArt.isComplete(total)) {
+                    Text(
+                        "Faltam ${total - ready.size} cartas de território. Enquanto o " +
+                            "baralho não fecha, a mão da partida continua com as cartas " +
+                            "desenhadas, para não misturar dois estilos.",
+                        color = TextSecondary.copy(alpha = 0.85f),
+                        fontSize = 10.sp
+                    )
+                }
+            }
+
             Spacer(Modifier.height(14.dp))
         }
 
@@ -245,6 +288,36 @@ private fun CardThumb(
             fontWeight = FontWeight.Bold,
             maxLines = 2,
             textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth()
+        )
+    }
+}
+
+@Composable
+private fun TerritoryThumb(id: Int, modifier: Modifier = Modifier) {
+    val art = if (id < 0) ClassicCardArt.jokerArt else ClassicCardArt.of(id) ?: return
+    val name = if (id < 0) "Coringa" else MapData.territory(id).name
+    Column(modifier = modifier) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(0.667f)
+                .clip(RoundedCornerShape(9.dp))
+                .background(Color(0xFF06090E))
+                .border(1.dp, TacticalStroke, RoundedCornerShape(9.dp))
+        ) {
+            Image(
+                painter = painterResource(id = art),
+                contentDescription = name,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+        Spacer(Modifier.height(4.dp))
+        Text(
+            name,
+            color = TextPrimary, fontSize = 8.5.sp, fontWeight = FontWeight.Bold,
+            maxLines = 1, textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth()
         )
     }

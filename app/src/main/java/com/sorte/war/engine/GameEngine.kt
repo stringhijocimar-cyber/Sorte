@@ -6,6 +6,7 @@ import com.sorte.war.model.ArmySnapshot
 import com.sorte.war.model.BattleLogEntry
 import com.sorte.war.model.Card
 import com.sorte.war.model.CardSymbol
+import com.sorte.war.model.ClassicSymbols
 import com.sorte.war.model.Difficulty
 import com.sorte.war.model.Fortification
 import com.sorte.war.model.GameMode
@@ -283,9 +284,11 @@ class GameEngine(
     }
 
     private fun buildCardDeck() {
-        val symbols = listOf(CardSymbol.CIRCULO, CardSymbol.QUADRADO, CardSymbol.TRIANGULO)
+        // O símbolo vem do que está impresso na carta ilustrada, para a carta
+        // na mão e a regra de troca dizerem a mesma coisa. O baralho continua
+        // com 14 de cada símbolo, como no tabuleiro.
         MapData.territories.forEach { t ->
-            drawPile.add(Card(symbols[t.id % 3], t.id))
+            drawPile.add(Card(ClassicSymbols.of(t.id), t.id))
         }
         drawPile.add(Card(CardSymbol.CORINGA, -1))
         drawPile.add(Card(CardSymbol.CORINGA, -1))
