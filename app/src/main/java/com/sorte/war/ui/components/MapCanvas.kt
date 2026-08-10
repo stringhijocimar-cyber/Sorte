@@ -67,7 +67,7 @@ fun MapCanvas(
     Canvas(
         modifier = modifier
             .fillMaxSize()
-            .background(Brush.verticalGradient(listOf(Color(0xFF092631), Color(0xFF06131B), Color(0xFF04090E))))
+            .background(Brush.verticalGradient(listOf(Color(0xFF08232D), Color(0xFF05131A), Color(0xFF03070B))))
             .pointerInput(Unit) {
                 detectTransformGestures { _, pan, zoom, _ ->
                     userScale = (userScale * zoom).coerceIn(1f, 6f)
@@ -154,7 +154,7 @@ private fun DrawScope.drawWatermark(size: Size) {
 }
 
 private fun DrawScope.drawOceanGrid(project: (Float, Float) -> Offset) {
-    val grid = Color(0x126CB7B3)
+    val grid = Color(0x0E6CB7B3)
     var gx = 0f
     while (gx <= VW) {
         drawLine(grid, project(gx, 0f), project(gx, VH), strokeWidth = 1f); gx += 50f
@@ -172,7 +172,7 @@ private fun DrawScope.drawRoutes(project: (Float, Float) -> Offset) {
         val tb = MapData.territory(b)
         val far = hypot(ta.x - tb.x, ta.y - tb.y) > 150f
         drawLine(
-            color = Color(0xFF82B8C7).copy(alpha = if (far) 0.34f else 0.14f),
+            color = Color(0xFF82B8C7).copy(alpha = if (far) 0.28f else 0.10f),
             start = project(ta.x, ta.y),
             end = project(tb.x, tb.y),
             strokeWidth = if (far) 1.6f else 1.2f,
@@ -254,11 +254,11 @@ private fun DrawScope.drawLandmasses(
         when {
             t.id == selected -> {
                 drawPath(path, Color(0x55E8B85A), style = Stroke(width = 7f))
-                drawPath(path, Color(0xFFE8B85A), style = Stroke(width = 2.6f))
+                drawPath(path, Color(0xFFF0C46A), style = Stroke(width = 2.8f))
             }
             t.id in validTargets -> {
                 drawPath(path, Color(0x4458B77B), style = Stroke(width = 6f))
-                drawPath(path, Color(0xFF58B77B), style = Stroke(width = 2.2f))
+                drawPath(path, Color(0xFF65D17E), style = Stroke(width = 2.4f))
             }
         }
     }

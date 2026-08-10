@@ -4,7 +4,6 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -27,7 +26,7 @@ import com.sorte.war.ui.components.VictoryDialog
 @Composable
 fun GameScreen(vm: GameViewModel) {
     val engine = vm.engine ?: return
-    val refresh = vm.refresh // dispara recomposição
+    val refresh = vm.refresh
 
     BackHandler { vm.backToMenu() }
 
@@ -40,7 +39,6 @@ fun GameScreen(vm: GameViewModel) {
         else -> emptySet()
     }
 
-    // Em paisagem o HUD fica mais enxuto para sobrar mais espaço ao mapa.
     val landscape = LocalConfiguration.current.orientation ==
         android.content.res.Configuration.ORIENTATION_LANDSCAPE
 
@@ -69,12 +67,11 @@ fun GameScreen(vm: GameViewModel) {
             engine = engine,
             refresh = refresh,
             statusMessage = vm.statusMessage,
+            selectedTerritory = selected,
             compact = landscape,
             onNextPhase = { vm.nextPhase() }
         )
     }
-
-    // ---------------- Diálogos ----------------
 
     vm.battleDialog?.let { result ->
         BattleDialog(
@@ -90,7 +87,6 @@ fun GameScreen(vm: GameViewModel) {
         CommanderReportDialog(report = report, onClose = { vm.dismissReport() })
     }
 
-    // Sorteio de quem começa (modo "nos dados")
     if (vm.showStartRoll && engine.initialRolls.isNotEmpty()) {
         StartRollDialog(
             players = engine.players,
@@ -101,7 +97,6 @@ fun GameScreen(vm: GameViewModel) {
         )
     }
 
-    // Escolha da carta de objetivo
     if (!vm.showStartRoll && engine.objectiveOptions.isNotEmpty()) {
         ObjectiveChoiceDialog(
             options = engine.objectiveOptions,

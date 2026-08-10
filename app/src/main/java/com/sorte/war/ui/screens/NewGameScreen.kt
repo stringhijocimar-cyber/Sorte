@@ -55,6 +55,8 @@ import com.sorte.war.ui.theme.PanelNavy
 import com.sorte.war.ui.theme.PanelNavyLight
 import com.sorte.war.ui.theme.SurfaceHigh
 import com.sorte.war.ui.theme.TacticalStroke
+import com.sorte.war.ui.theme.TacticalTeal
+import com.sorte.war.ui.theme.TextPrimary
 import com.sorte.war.ui.theme.TextSecondary
 
 @Composable
@@ -72,32 +74,49 @@ fun NewGameScreen(vm: GameViewModel) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Brush.verticalGradient(listOf(Color(0xFF0A1D27), Color(0xFF07111A), NightNavy)))
+            .background(
+                Brush.verticalGradient(
+                    listOf(Color(0xFF081923), Color(0xFF061018), NightNavy)
+                )
+            )
             .systemBarsPadding()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp, vertical = 16.dp)
+            .padding(horizontal = 16.dp, vertical = 13.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
                 modifier = Modifier
-                    .clip(CircleShape)
-                    .background(Color(0x14FFFFFF))
-                    .clickableNoRipple { vm.goTo(Screen.HOME) }
-                    .padding(8.dp)
+                    .size(42.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(Color.Black.copy(alpha = 0.22f))
+                    .border(1.dp, Gold.copy(alpha = 0.55f), RoundedCornerShape(10.dp))
+                    .clickableNoRipple { vm.goTo(Screen.HOME) },
+                contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.Filled.ArrowBack, contentDescription = "Voltar", tint = Color.White)
+                Icon(Icons.Filled.ArrowBack, contentDescription = "Voltar", tint = Gold)
             }
-            Spacer(Modifier.width(12.dp))
-            Text(
-                "NOVA CAMPANHA",
-                color = Gold, fontWeight = FontWeight.Black,
-                fontSize = 20.sp, letterSpacing = 2.sp
-            )
+            Spacer(Modifier.width(11.dp))
+            Column {
+                Text(
+                    "NOVA CAMPANHA",
+                    color = Gold,
+                    fontWeight = FontWeight.Black,
+                    fontSize = 21.sp,
+                    letterSpacing = 1.9.sp
+                )
+                Text(
+                    "CONFIGURE SUA CONQUISTA",
+                    color = TacticalTeal,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 8.sp,
+                    letterSpacing = 1.3.sp
+                )
+            }
         }
 
-        Spacer(Modifier.height(18.dp))
+        Spacer(Modifier.height(14.dp))
 
-        SetupCard("Seu nome") {
+        SetupSection(1, "SEU NOME") {
             OutlinedTextField(
                 value = name,
                 onValueChange = { if (it.length <= 16) name = it },
@@ -106,61 +125,100 @@ fun NewGameScreen(vm: GameViewModel) {
             )
         }
 
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(10.dp))
 
-        SetupCard("Seu comandante") {
+        SetupSection(2, "SEU COMANDANTE") {
             Row(
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
+                horizontalArrangement = Arrangement.spacedBy(9.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
             ) {
                 Avatar.all.forEachIndexed { i, av ->
-                    val sel = avatarIndex == i
-                    AvatarPortrait(
-                        avatar = av,
-                        sizeDp = if (sel) 64 else 54,
-                        ringColor = if (sel) Gold else Color(0x33FFFFFF),
-                        modifier = Modifier.clickableNoRipple { avatarIndex = i }
-                    )
+                    val selected = avatarIndex == i
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier
+                            .width(78.dp)
+                            .clip(RoundedCornerShape(13.dp))
+                            .background(
+                                if (selected) TacticalTeal.copy(alpha = 0.10f)
+                                else Color.Black.copy(alpha = 0.15f)
+                            )
+                            .border(
+                                if (selected) 1.7.dp else 1.dp,
+                                if (selected) TacticalTeal else TacticalStroke,
+                                RoundedCornerShape(13.dp)
+                            )
+                            .clickableNoRipple { avatarIndex = i }
+                            .padding(vertical = 8.dp, horizontal = 5.dp)
+                    ) {
+                        AvatarPortrait(
+                            avatar = av,
+                            sizeDp = if (selected) 57 else 50,
+                            ringColor = if (selected) TacticalTeal else Color(0x55FFFFFF)
+                        )
+                        Spacer(Modifier.height(5.dp))
+                        Text(
+                            av.commander,
+                            color = if (selected) TacticalTeal else TextPrimary,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 8.sp,
+                            maxLines = 1
+                        )
+                        if (selected) {
+                            Spacer(Modifier.height(3.dp))
+                            Icon(
+                                Icons.Filled.Check,
+                                contentDescription = null,
+                                tint = TacticalTeal,
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
+                    }
                 }
             }
             Spacer(Modifier.height(8.dp))
             val chosen = Avatar.byId(avatarIndex)
             Text(
                 "${chosen.commander} — ${chosen.epithet}",
-                color = Color.White, fontWeight = FontWeight.Bold,
+                color = TextPrimary,
+                fontWeight = FontWeight.Bold,
                 style = MaterialTheme.typography.bodyMedium
             )
             Text(chosen.era, color = TextSecondary, style = MaterialTheme.typography.labelSmall)
         }
 
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(10.dp))
 
-        SetupCard("Cor do seu exército") {
+        SetupSection(3, "COR DO SEU EXÉRCITO") {
             Row(
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 PlayerPalette.ordered.forEachIndexed { i, army ->
-                    val sel = colorIndex == i
+                    val selected = colorIndex == i
                     Box(
                         modifier = Modifier
-                            .size(40.dp)
-                            .clip(CircleShape)
+                            .weight(1f)
+                            .height(42.dp)
+                            .clip(RoundedCornerShape(10.dp))
                             .background(Color(army.argb))
                             .border(
-                                width = if (sel) 3.dp else 1.dp,
-                                color = if (sel) Gold else Color(0x55FFFFFF),
-                                shape = CircleShape
+                                if (selected) 3.dp else 1.dp,
+                                if (selected) TacticalTeal else Color(0x66FFFFFF),
+                                RoundedCornerShape(10.dp)
                             )
                             .clickableNoRipple { colorIndex = i },
                         contentAlignment = Alignment.Center
                     ) {
-                        if (sel) {
+                        if (selected) {
                             Icon(
-                                Icons.Filled.Check, contentDescription = army.name,
+                                Icons.Filled.Check,
+                                contentDescription = army.name,
                                 tint = if (army.argb == 0xFFFDD835 || army.argb == 0xFFECEFF1)
                                     NightNavy else Color.White,
-                                modifier = Modifier.size(20.dp)
+                                modifier = Modifier.size(19.dp)
                             )
                         }
                     }
@@ -168,147 +226,191 @@ fun NewGameScreen(vm: GameViewModel) {
             }
         }
 
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(10.dp))
 
-        SetupCard("Número de exércitos") {
+        SetupSection(4, "NÚMERO DE EXÉRCITOS") {
             Row(
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 (2..6).forEach { count ->
-                    val sel = players == count
+                    val selected = players == count
                     Box(
+                        contentAlignment = Alignment.Center,
                         modifier = Modifier
-                            .size(46.dp)
-                            .clip(CircleShape)
-                            .background(if (sel) Gold else SurfaceHigh)
-                            .clickableNoRipple { players = count },
-                        contentAlignment = Alignment.Center
+                            .weight(1f)
+                            .height(44.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(
+                                if (selected) TacticalTeal.copy(alpha = 0.13f) else SurfaceHigh
+                            )
+                            .border(
+                                if (selected) 1.7.dp else 1.dp,
+                                if (selected) TacticalTeal else TacticalStroke,
+                                RoundedCornerShape(10.dp)
+                            )
+                            .clickableNoRipple { players = count }
                     ) {
                         Text(
                             count.toString(),
-                            color = if (sel) NightNavy else Color.White,
-                            fontWeight = FontWeight.Bold, fontSize = 17.sp
+                            color = if (selected) TacticalTeal else TextPrimary,
+                            fontWeight = FontWeight.Black,
+                            fontSize = 17.sp
                         )
                     }
                 }
             }
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(5.dp))
             Text(
-                "Você + ${players - 1} oponente(s) da CPU.",
-                color = TextSecondary, style = MaterialTheme.typography.bodyMedium
+                "Você + ${players - 1} oponente(s) controlado(s) pela CPU.",
+                color = TextSecondary,
+                fontSize = 10.sp
             )
         }
 
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(10.dp))
 
-        SetupCard("Dificuldade") {
-            Difficulty.entries.forEach { d ->
-                val sel = difficulty == d
+        SetupSection(5, "DIFICULDADE") {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(7.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+            ) {
+                Difficulty.entries.forEach { level ->
+                    val selected = difficulty == level
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier
+                            .width(126.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(
+                                if (selected) TacticalTeal.copy(alpha = 0.09f)
+                                else Color.Black.copy(alpha = 0.16f)
+                            )
+                            .border(
+                                if (selected) 1.7.dp else 1.dp,
+                                if (selected) TacticalTeal else TacticalStroke,
+                                RoundedCornerShape(12.dp)
+                            )
+                            .clickableNoRipple { difficulty = level }
+                            .padding(horizontal = 9.dp, vertical = 11.dp)
+                    ) {
+                        Text(
+                            level.label.uppercase(),
+                            color = if (selected) TacticalTeal else Gold,
+                            fontWeight = FontWeight.Black,
+                            fontSize = 11.sp
+                        )
+                        Spacer(Modifier.height(5.dp))
+                        Text(
+                            level.description,
+                            color = TextSecondary,
+                            fontSize = 8.sp,
+                            lineHeight = 11.sp
+                        )
+                        if (selected) {
+                            Spacer(Modifier.height(5.dp))
+                            Icon(
+                                Icons.Filled.Check,
+                                contentDescription = null,
+                                tint = TacticalTeal,
+                                modifier = Modifier.size(15.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        Spacer(Modifier.height(10.dp))
+
+        SetupSection(6, "INÍCIO DA PARTIDA") {
+            SetupMode.entries.forEach { mode ->
+                val selected = setupMode == mode
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(vertical = 3.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(if (sel) Gold.copy(alpha = 0.18f) else PanelNavyLight)
-                        .border(
-                            if (sel) 2.dp else 1.dp,
-                            if (sel) Gold else TacticalStroke,
-                            RoundedCornerShape(12.dp)
+                        .clip(RoundedCornerShape(11.dp))
+                        .background(
+                            if (selected) TacticalTeal.copy(alpha = 0.09f)
+                            else Color.Black.copy(alpha = 0.13f)
                         )
-                        .clickableNoRipple { difficulty = d }
-                        .padding(horizontal = 12.dp, vertical = 10.dp)
+                        .border(
+                            if (selected) 1.6.dp else 1.dp,
+                            if (selected) TacticalTeal else TacticalStroke,
+                            RoundedCornerShape(11.dp)
+                        )
+                        .clickableNoRipple { setupMode = mode }
+                        .padding(horizontal = 11.dp, vertical = 9.dp)
                 ) {
                     Column(Modifier.weight(1f)) {
                         Text(
-                            d.label,
-                            color = if (sel) Gold else Color.White,
-                            fontWeight = FontWeight.Bold
+                            mode.label.uppercase(),
+                            color = if (selected) TacticalTeal else TextPrimary,
+                            fontWeight = FontWeight.Black,
+                            fontSize = 10.sp
                         )
                         Text(
-                            d.description,
+                            mode.description,
                             color = TextSecondary,
-                            style = MaterialTheme.typography.labelSmall
+                            fontSize = 8.sp
                         )
                     }
-                    if (sel) Icon(Icons.Filled.Check, contentDescription = null, tint = Gold)
+                    if (selected) {
+                        Icon(
+                            Icons.Filled.Check,
+                            contentDescription = null,
+                            tint = TacticalTeal,
+                            modifier = Modifier.size(19.dp)
+                        )
+                    }
                 }
             }
         }
 
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(10.dp))
 
-        SetupCard("Início da partida") {
-            SetupMode.entries.forEach { m ->
-                val sel = setupMode == m
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 3.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(if (sel) Gold.copy(alpha = 0.18f) else PanelNavyLight)
-                        .border(
-                            if (sel) 2.dp else 1.dp,
-                            if (sel) Gold else TacticalStroke,
-                            RoundedCornerShape(12.dp)
-                        )
-                        .clickableNoRipple { setupMode = m }
-                        .padding(horizontal = 12.dp, vertical = 10.dp)
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            m.label,
-                            color = if (sel) Gold else Color.White,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            m.description,
-                            color = TextSecondary,
-                            style = MaterialTheme.typography.labelSmall
-                        )
-                    }
-                    if (sel) Icon(Icons.Filled.Check, contentDescription = null, tint = Gold)
-                }
-            }
-        }
-
-        Spacer(Modifier.height(14.dp))
-
-        SetupCard("Objetivo secreto") {
+        SetupSection(7, "OBJETIVO SECRETO") {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(PanelNavyLight)
+                    .clip(RoundedCornerShape(11.dp))
+                    .background(Color.Black.copy(alpha = 0.13f))
+                    .border(1.dp, TacticalStroke, RoundedCornerShape(11.dp))
                     .clickableNoRipple { pickObjective = !pickObjective }
-                    .padding(horizontal = 12.dp, vertical = 10.dp)
+                    .padding(horizontal = 11.dp, vertical = 10.dp)
             ) {
                 Column(Modifier.weight(1f)) {
                     Text(
-                        if (pickObjective) "Escolher entre 3 cartas" else "Sortear automaticamente",
-                        color = Color.White, fontWeight = FontWeight.Bold
+                        if (pickObjective) "ESCOLHER ENTRE 3 CARTAS" else "SORTEAR AUTOMATICAMENTE",
+                        color = if (pickObjective) TacticalTeal else TextPrimary,
+                        fontWeight = FontWeight.Black,
+                        fontSize = 10.sp
                     )
                     Text(
                         if (pickObjective)
-                            "Você recebe três cartas viradas e escolhe a sua missão."
-                        else "O jogo sorteia uma carta de objetivo para você.",
-                        color = TextSecondary, style = MaterialTheme.typography.labelSmall
+                            "Três objetivos serão apresentados para sua escolha."
+                        else "O jogo selecionará seu objetivo secreto.",
+                        color = TextSecondary,
+                        fontSize = 8.sp
                     )
                 }
                 Box(
                     modifier = Modifier
-                        .size(46.dp, 26.dp)
-                        .clip(RoundedCornerShape(13.dp))
-                        .background(if (pickObjective) Gold else SurfaceHigh),
+                        .size(48.dp, 27.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(if (pickObjective) TacticalTeal else SurfaceHigh)
+                        .border(1.dp, TacticalStroke, RoundedCornerShape(14.dp)),
                     contentAlignment = if (pickObjective) Alignment.CenterEnd else Alignment.CenterStart
                 ) {
                     Box(
                         Modifier
                             .padding(3.dp)
-                            .size(20.dp)
+                            .size(21.dp)
                             .clip(CircleShape)
                             .background(Color.White)
                     )
@@ -316,38 +418,57 @@ fun NewGameScreen(vm: GameViewModel) {
             }
         }
 
-        Spacer(Modifier.height(20.dp))
+        Spacer(Modifier.height(16.dp))
 
         if (vm.saveInfo != null) {
             Text(
-                "Atenção: iniciar uma nova campanha descarta a partida salva.",
-                color = Color(0xFFFFB74D),
-                style = MaterialTheme.typography.labelSmall
+                "Atenção: uma nova campanha substituirá a partida salva.",
+                color = Color(0xFFE8A45B),
+                fontSize = 9.sp
             )
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(7.dp))
         }
 
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(58.dp)
-                .clip(RoundedCornerShape(16.dp))
-                .background(Gold)
+                .height(62.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .background(
+                    Brush.horizontalGradient(
+                        listOf(Color(0xFF0D5B60), Color(0xFF11363C), Color(0xFF0A1A20))
+                    )
+                )
+                .border(1.6.dp, TacticalTeal, RoundedCornerShape(14.dp))
                 .clickableNoRipple {
                     vm.startGame(
                         name, players, colorIndex, avatarIndex,
                         difficulty, setupMode, pickObjective
                     )
                 }
-                .padding(horizontal = 18.dp)
+                .padding(horizontal = 16.dp)
         ) {
-            Icon(Icons.Filled.PlayArrow, contentDescription = null, tint = NightNavy)
-            Spacer(Modifier.width(10.dp))
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(Gold.copy(alpha = 0.15f))
+                    .border(1.dp, Gold.copy(alpha = 0.60f), CircleShape)
+            ) {
+                Icon(Icons.Filled.PlayArrow, contentDescription = null, tint = Gold)
+            }
+            Spacer(Modifier.width(11.dp))
             Text(
                 "COMEÇAR A GUERRA",
-                color = NightNavy, fontWeight = FontWeight.Black, letterSpacing = 1.sp
+                color = TextPrimary,
+                fontWeight = FontWeight.Black,
+                fontSize = 17.sp,
+                letterSpacing = 1.sp,
+                modifier = Modifier.weight(1f)
             )
+            Icon(Icons.Filled.PlayArrow, contentDescription = null, tint = TacticalTeal)
         }
 
         Spacer(Modifier.height(20.dp))
@@ -355,15 +476,48 @@ fun NewGameScreen(vm: GameViewModel) {
 }
 
 @Composable
-private fun SetupCard(title: String, content: @Composable () -> Unit) {
+private fun SetupSection(
+    number: Int,
+    title: String,
+    content: @Composable () -> Unit
+) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
-            .background(PanelNavy)
-            .padding(16.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(
+                Brush.horizontalGradient(
+                    listOf(PanelNavyLight.copy(alpha = 0.90f), PanelNavy)
+                )
+            )
+            .border(1.dp, Gold.copy(alpha = 0.48f), RoundedCornerShape(14.dp))
+            .padding(12.dp)
     ) {
-        Text(title, style = MaterialTheme.typography.labelLarge, color = TextSecondary)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .size(26.dp)
+                    .clip(RoundedCornerShape(7.dp))
+                    .background(Gold.copy(alpha = 0.13f))
+                    .border(1.dp, Gold.copy(alpha = 0.52f), RoundedCornerShape(7.dp))
+            ) {
+                Text(
+                    number.toString(),
+                    color = Gold,
+                    fontWeight = FontWeight.Black,
+                    fontSize = 11.sp
+                )
+            }
+            Spacer(Modifier.width(8.dp))
+            Text(
+                title,
+                color = Gold,
+                fontWeight = FontWeight.Black,
+                fontSize = 10.sp,
+                letterSpacing = 1.1.sp
+            )
+        }
         Spacer(Modifier.height(10.dp))
         content()
     }

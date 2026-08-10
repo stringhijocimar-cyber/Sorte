@@ -24,3 +24,4 @@ app/build/
 
 # Backup gerado pelo script de redesign de UI
 .premium-ui-backup/
+.premium-ui-v2-backup/
