@@ -1,16 +1,26 @@
 package com.sorte.war.engine
 
 import com.sorte.war.model.ArmyColor
+import com.sorte.war.model.ArmyRoundStats
+import com.sorte.war.model.ArmySnapshot
+import com.sorte.war.model.BattleLogEntry
 import com.sorte.war.model.Card
 import com.sorte.war.model.CardSymbol
 import com.sorte.war.model.Difficulty
+import com.sorte.war.model.Fortification
+import com.sorte.war.model.GameMode
 import com.sorte.war.model.MapData
 import com.sorte.war.model.Objective
 import com.sorte.war.model.Objectives
 import com.sorte.war.model.Phase
 import com.sorte.war.model.Player
 import com.sorte.war.model.PlayerPalette
+import com.sorte.war.model.RoundReport
+import com.sorte.war.model.RoundSnapshot
 import com.sorte.war.model.SetupMode
+import com.sorte.war.model.TacticalCard
+import com.sorte.war.model.TacticalMedal
+import com.sorte.war.model.TacticalTarget
 import kotlin.random.Random
 
 /**
@@ -25,7 +35,9 @@ class GameEngine(
     /** Quantas cartas de objetivo o jogador humano recebe para escolher. */
     private val objectiveChoices: Int = 1,
     private val rng: Random = Random(System.nanoTime()),
-    skipSetup: Boolean = false
+    skipSetup: Boolean = false,
+    /** Clássico mantém as regras do tabuleiro; tático liga a expansão. */
+    val mode: GameMode = GameMode.CLASSICO
 ) {
     data class PlayerConfig(
         val name: String,
@@ -90,6 +102,63 @@ class GameEngine(
     var objectiveOptions: List<Objective> = emptyList()
         private set
 
+    // ---------------------------------------------------------------------
+    // ESTADO DO MODO TÁTICO
+    // Tudo aqui fica neutro (zerado/vazio) quando a partida é clássica.
+    // ---------------------------------------------------------------------
+
+    val tactical: Boolean get() = mode == GameMode.TATICO
+
+    /** Turnos já encerrados. Serve de relógio para tréguas e para o log. */
+    var turnNumber = 0
+        private set
+
+    /** Rodada completa em andamento (todos os exércitos jogam uma vez). */
+    var roundNumber = 1
+        private set
+
+    /** Reforço de Momentum guardado para o próximo turno de cada exército. */
+    private val momentumOf = IntArray(players.size)
+
+    /** Momentum que entrou no reforço do turno atual (para mostrar no HUD). */
+    var momentumApplied = 0
+        private set
+
+    /** Territórios tomados pelo jogador da vez neste turno. */
+    var conquestsThisTurn = 0
+        private set
+
+    private val tacticalDraw = ArrayDeque<TacticalCard>()
+    private val tacticalDiscard = mutableListOf<TacticalCard>()
+
+    /** Bônus de continente anulado por Sabotagem, por exército. */
+    private val continentBonusBlocked = BooleanArray(players.size)
+
+    /** Turno até o qual vale a trégua entre dois exércitos (Diplomacia). */
+    private val truceUntil = Array(players.size) { IntArray(players.size) }
+
+    /** Deslocamentos extras liberados por Marcha Forçada neste turno. */
+    var extraFortifies = 0
+        private set
+
+    // Modificadores preparados para o próximo ataque (consumidos ao atacar).
+    private var attackDiceBonus = 0
+    private var seaRouteDiceBonus = 0
+    private var ignoreFortification = false
+
+    /** Combates da rodada em curso, base do relatório. */
+    val battleLog = mutableListOf<BattleLogEntry>()
+    private val roundEvents = mutableListOf<String>()
+    private val tacticalUsedThisRound = IntArray(players.size)
+    private var snapshot: RoundSnapshot? = null
+
+    /** Relatório fechado da última rodada completa (null enquanto não houver). */
+    var lastRoundReport: RoundReport? = null
+        private set
+
+    /** Já esteve bem atrás do líder? (usado pela medalha Reviravolta.) */
+    private val wasBehind = BooleanArray(players.size)
+
     val currentPlayer: Player get() = players[currentPlayerIndex]
 
     init {
@@ -97,7 +166,9 @@ class GameEngine(
             setupBoard()
             assignObjectives()
             buildCardDeck()
+            if (tactical) buildTacticalDeck()
             currentPlayerIndex = startingPlayer
+            takeSnapshot()
             startTurn()
         }
     }
@@ -204,12 +275,51 @@ class GameEngine(
         return if (drawPile.isEmpty()) null else drawPile.removeFirst()
     }
 
+    private fun buildTacticalDeck() {
+        tacticalDraw.clear()
+        tacticalDraw.addAll(TacticalCard.buildDeck().shuffled(rng))
+    }
+
+    private fun drawTactical(): TacticalCard? {
+        if (!tactical) return null
+        if (tacticalDraw.isEmpty()) {
+            if (tacticalDiscard.isEmpty()) return null
+            tacticalDraw.addAll(tacticalDiscard.shuffled(rng))
+            tacticalDiscard.clear()
+        }
+        return if (tacticalDraw.isEmpty()) null else tacticalDraw.removeFirst()
+    }
+
+    /** Entrega uma carta tática, respeitando o limite de mão. */
+    private fun giveTactical(playerId: Int): TacticalCard? {
+        val card = drawTactical() ?: return null
+        val hand = players[playerId].tacticalCards
+        hand.add(card)
+        // mão cheia: a carta mais antiga volta para o descarte
+        while (hand.size > TACTICAL_HAND_LIMIT) tacticalDiscard.add(hand.removeAt(0))
+        return card
+    }
+
     // ---------------------------------------------------------------------
     // CONSULTAS
     // ---------------------------------------------------------------------
 
     fun territoriesOf(playerId: Int): List<Int> = (0 until n).filter { ownerOf[it] == playerId }
     fun ownedCount(playerId: Int): Int = (0 until n).count { ownerOf[it] == playerId }
+
+    /** Nível defensivo do território. Sempre NENHUMA fora do modo tático. */
+    fun fortificationOf(tId: Int): Fortification =
+        if (!tactical) Fortification.NENHUMA else Fortification.forArmies(armiesOf[tId])
+
+    /** Há trégua vigente entre estes dois exércitos? (carta Diplomacia) */
+    fun hasTruce(a: Int, b: Int): Boolean {
+        if (!tactical) return false
+        if (a !in players.indices || b !in players.indices) return false
+        return truceUntil[a][b] > turnNumber
+    }
+
+    fun totalArmiesOf(playerId: Int): Int =
+        (0 until n).sumOf { if (ownerOf[it] == playerId) armiesOf[it] else 0 }
 
     fun ownsContinent(playerId: Int, continentId: Int): Boolean =
         MapData.continent(continentId).territoryIds.all { ownerOf[it] == playerId }
@@ -220,11 +330,14 @@ class GameEngine(
     /** Territórios de onde o jogador atual pode atacar (>1 exército e vizinho inimigo). */
     fun canAttackFrom(tId: Int): Boolean {
         if (ownerOf[tId] != currentPlayerIndex || armiesOf[tId] < 2) return false
-        return MapData.territory(tId).neighbors.any { ownerOf[it] != currentPlayerIndex }
+        return attackTargets(tId).isNotEmpty()
     }
 
+    /** Vizinhos inimigos atacáveis (uma trégua vigente retira o alvo da lista). */
     fun attackTargets(from: Int): List<Int> =
-        MapData.territory(from).neighbors.filter { ownerOf[it] != currentPlayerIndex }
+        MapData.territory(from).neighbors.filter {
+            ownerOf[it] != currentPlayerIndex && !hasTruce(currentPlayerIndex, ownerOf[it])
+        }
 
     /** Alvos de deslocamento: territórios próprios conectados por caminho amigo. */
     fun fortifyTargets(from: Int): List<Int> {
@@ -253,13 +366,23 @@ class GameEngine(
         fortifyUsed = false
         pendingAdvance = null
         phase = Phase.REFORCO
-        reinforcements = computeBaseReinforcements(currentPlayerIndex)
+        conquestsThisTurn = 0
+        extraFortifies = 0
+        attackDiceBonus = 0
+        seaRouteDiceBonus = 0
+        ignoreFortification = false
+        momentumApplied = if (tactical) momentumOf[currentPlayerIndex] else 0
+        momentumOf[currentPlayerIndex] = 0
+        reinforcements = computeBaseReinforcements(currentPlayerIndex) + momentumApplied
+        // a sabotagem vale apenas para este reforço
+        continentBonusBlocked[currentPlayerIndex] = false
     }
 
     fun computeBaseReinforcements(playerId: Int): Int {
         val terr = ownedCount(playerId)
         val base = maxOf(3, terr / 2)
-        val bonus = fullyOwnedContinents(playerId).sumOf { MapData.continent(it).bonus }
+        val bonus = if (tactical && continentBonusBlocked[playerId]) 0
+        else fullyOwnedContinents(playerId).sumOf { MapData.continent(it).bonus }
         // vantagem concedida às CPUs conforme o nível de dificuldade escolhido
         val handicap =
             if (players[playerId].isHuman) 0 else difficulty.bonusReinforcements
@@ -290,19 +413,47 @@ class GameEngine(
     }
 
     private fun endTurn() {
-        // Direito a uma carta se conquistou ao menos um território.
+        // Direito a uma carta de território se conquistou ao menos um território.
         if (conqueredThisTurn) {
             drawCard()?.let { currentPlayer.cards.add(it) }
         }
+        if (tactical) awardMomentum(currentPlayerIndex)
+        checkMedals()
+        turnNumber++
+
         // Próximo jogador não eliminado.
         var next = currentPlayerIndex
         do {
             next = (next + 1) % players.size
         } while (players[next].eliminated && next != currentPlayerIndex)
+        val wrapped = next <= currentPlayerIndex
         currentPlayerIndex = next
+        if (wrapped) closeRound()
         startTurn()
         checkVictory()
     }
+
+    /**
+     * Recompensa de Momentum do modo tático, medida pelos territórios tomados
+     * no turno: 2 conquistas rendem uma carta tática; a partir de 3, reforço
+     * extra no turno seguinte, limitado a +3.
+     */
+    private fun awardMomentum(playerId: Int) {
+        if (conquestsThisTurn >= 2) {
+            giveTactical(playerId)?.let {
+                roundEvents.add("${players[playerId].name} recebeu a carta tática ${it.title}")
+            }
+        }
+        val extra = (conquestsThisTurn - 2).coerceIn(0, MAX_MOMENTUM)
+        momentumOf[playerId] = extra
+        if (extra > 0) {
+            roundEvents.add("Momentum +$extra para ${players[playerId].name}")
+        }
+    }
+
+    /** Momentum guardado para o próximo turno deste exército. */
+    fun pendingMomentum(playerId: Int): Int =
+        if (!tactical || playerId !in players.indices) 0 else momentumOf[playerId]
 
     // ---------------------------------------------------------------------
     // COMBATE
@@ -318,13 +469,24 @@ class GameEngine(
         if (ownerOf[to] == currentPlayerIndex) return null
         if (to !in MapData.territory(from).neighbors) return null
         if (armiesOf[from] < 2) return null
+        val defenderId = ownerOf[to]
+        if (hasTruce(currentPlayerIndex, defenderId)) return null
         pendingAdvance = null
 
         val attackDice = minOf(3, armiesOf[from] - 1)
         val defendDice = minOf(3, armiesOf[to])
 
-        val aRolls = List(attackDice) { rng.nextInt(6) + 1 }.sortedDescending()
-        val dRolls = List(defendDice) { rng.nextInt(6) + 1 }.sortedDescending()
+        // Defesa: a fortificação do território soma +1 aos maiores dados.
+        val fortificationUsed = if (ignoreFortification) 0 else fortificationOf(to).level
+        // Ataque: bônus preparado por cartas táticas (Tanque, Caça, Navio).
+        val seaRoute = MapData.territory(from).continentId != MapData.territory(to).continentId
+        val attackBoost = attackDiceBonus + (if (seaRoute) seaRouteDiceBonus else 0)
+        attackDiceBonus = 0
+        seaRouteDiceBonus = 0
+        ignoreFortification = false
+
+        val aRolls = boostTopDice(List(attackDice) { rng.nextInt(6) + 1 }, attackBoost)
+        val dRolls = boostTopDice(List(defendDice) { rng.nextInt(6) + 1 }, fortificationUsed)
 
         var aLoss = 0
         var dLoss = 0
@@ -339,7 +501,6 @@ class GameEngine(
         var conquered = false
         if (armiesOf[to] <= 0) {
             conquered = true
-            val defenderId = ownerOf[to]
             ownerOf[to] = currentPlayerIndex
             val minMove = attackDice
             val maxMove = armiesOf[from] - 1
@@ -347,10 +508,25 @@ class GameEngine(
             armiesOf[from] -= move
             armiesOf[to] = move
             conqueredThisTurn = true
+            conquestsThisTurn++
             pendingAdvance = if (moveArmies == null && maxMove > minMove)
                 AdvanceOption(from, to, minMove, maxMove) else null
             handlePossibleElimination(defenderId, currentPlayerIndex)
         }
+
+        battleLog.add(
+            BattleLogEntry(
+                attackerId = currentPlayerIndex,
+                defenderId = defenderId,
+                fromTerritoryId = from,
+                toTerritoryId = to,
+                attackerLosses = aLoss,
+                defenderLosses = dLoss,
+                conquered = conquered,
+                fortificationLevel = fortificationUsed,
+                turnNumber = turnNumber
+            )
+        )
 
         val result = com.sorte.war.model.BattleResult(
             attackerTerritoryId = from,
@@ -359,11 +535,23 @@ class GameEngine(
             defenderDice = dRolls,
             attackerLosses = aLoss,
             defenderLosses = dLoss,
-            conquered = conquered
+            conquered = conquered,
+            fortificationLevel = fortificationUsed
         )
         lastBattle = result
         checkVictory()
         return result
+    }
+
+    /** Soma +1 aos [count] maiores dados, sem nunca passar de 6. */
+    private fun boostTopDice(rolls: List<Int>, count: Int): List<Int> {
+        val sorted = rolls.sortedDescending()
+        if (count <= 0) return sorted
+        val boosted = sorted.toMutableList()
+        for (i in 0 until minOf(count, boosted.size)) {
+            boosted[i] = minOf(6, boosted[i] + 1)
+        }
+        return boosted.sortedDescending()
     }
 
     private fun handlePossibleElimination(defenderId: Int, killerId: Int) {
@@ -374,6 +562,11 @@ class GameEngine(
             // O vencedor herda as cartas do eliminado (regra do War).
             players[killerId].cards.addAll(players[defenderId].cards)
             players[defenderId].cards.clear()
+            if (tactical) {
+                tacticalDiscard.addAll(players[defenderId].tacticalCards)
+                players[defenderId].tacticalCards.clear()
+            }
+            roundEvents.add("${players[defenderId].name} foi eliminado por ${players[killerId].name}")
         }
     }
 
@@ -394,15 +587,18 @@ class GameEngine(
     // DESLOCAMENTO
     // ---------------------------------------------------------------------
 
+    /** Ainda pode deslocar? (Marcha Forçada libera movimentos adicionais.) */
+    fun canFortifyNow(): Boolean = phase == Phase.DESLOCAMENTO && (!fortifyUsed || extraFortifies > 0)
+
     fun fortify(from: Int, to: Int, count: Int): Boolean {
-        if (phase != Phase.DESLOCAMENTO || fortifyUsed) return false
+        if (!canFortifyNow()) return false
         if (ownerOf[from] != currentPlayerIndex || ownerOf[to] != currentPlayerIndex) return false
         if (to !in fortifyTargets(from)) return false
         val c = count.coerceIn(1, armiesOf[from] - 1)
         if (c <= 0) return false
         armiesOf[from] -= c
         armiesOf[to] += c
-        fortifyUsed = true
+        if (fortifyUsed) extraFortifies-- else fortifyUsed = true
         return true
     }
 
@@ -455,6 +651,283 @@ class GameEngine(
     fun mustTradeCards(): Boolean = currentPlayer.cards.size >= 5
 
     // ---------------------------------------------------------------------
+    // CARTAS TÁTICAS (expansão — inertes no modo clássico)
+    // ---------------------------------------------------------------------
+
+    /** Territórios inimigos vizinhos de algum território seu, com tropas de sobra. */
+    fun airStrikeTargets(): List<Int> = (0 until n).filter { t ->
+        ownerOf[t] != currentPlayerIndex && armiesOf[t] > 1 &&
+            !hasTruce(currentPlayerIndex, ownerOf[t]) &&
+            MapData.territory(t).neighbors.any { ownerOf[it] == currentPlayerIndex }
+    }
+
+    /** Qualquer território inimigo com tropas de sobra. */
+    fun bombardTargets(): List<Int> = (0 until n).filter { t ->
+        ownerOf[t] != currentPlayerIndex && armiesOf[t] > 1 &&
+            !hasTruce(currentPlayerIndex, ownerOf[t])
+    }
+
+    /** Territórios seus que podem ceder tropas. */
+    fun troopSources(): List<Int> =
+        territoriesOf(currentPlayerIndex).filter { armiesOf[it] > 1 }
+
+    /** Destinos possíveis para a carta [card] saindo de [from]. */
+    fun troopDestinations(card: TacticalCard, from: Int): List<Int> {
+        if (ownerOf[from] != currentPlayerIndex || armiesOf[from] < 2) return emptyList()
+        val mine = territoriesOf(currentPlayerIndex).filter { it != from }
+        return if (card.target == TacticalTarget.PAR_PROPRIO_VIZINHO) {
+            mine.filter { it in MapData.territory(from).neighbors }
+        } else mine
+    }
+
+    fun rivals(): List<Int> = players.filter { !it.eliminated && it.id != currentPlayerIndex }.map { it.id }
+
+    /**
+     * Por que esta carta não pode ser usada agora? Devolve null quando pode.
+     * O texto é mostrado ao jogador na tela de cartas.
+     */
+    fun tacticalBlockReason(card: TacticalCard): String? {
+        if (!tactical) return "Disponível apenas no Modo Tático."
+        if (winnerId != null) return "A campanha terminou."
+        if (card !in currentPlayer.tacticalCards) return "Você não possui esta carta."
+        if (phase !in card.phases) return "Só pode ser usada: ${card.timing.lowercase()}"
+        return when (card.target) {
+            TacticalTarget.NENHUM -> null
+            TacticalTarget.TERRITORIO_PROPRIO ->
+                if (territoriesOf(currentPlayerIndex).isEmpty()) "Você não controla territórios." else null
+            TacticalTarget.INIMIGO_VIZINHO ->
+                if (airStrikeTargets().isEmpty())
+                    "Nenhum território inimigo vizinho com tropas suficientes." else null
+            TacticalTarget.INIMIGO_QUALQUER ->
+                if (bombardTargets().isEmpty())
+                    "Nenhum território inimigo com tropas suficientes." else null
+            TacticalTarget.PAR_PROPRIO_VIZINHO, TacticalTarget.PAR_PROPRIO_QUALQUER ->
+                if (troopSources().none { troopDestinations(card, it).isNotEmpty() })
+                    "Nenhum território seu tem tropas de sobra para mover." else null
+            TacticalTarget.JOGADOR ->
+                if (rivals().isEmpty()) "Nenhum adversário em jogo." else null
+        }
+    }
+
+    fun canPlayTactical(card: TacticalCard): Boolean = tacticalBlockReason(card) == null
+
+    /**
+     * Executa uma carta tática do jogador da vez e devolve o relato do efeito
+     * (null se a jogada for inválida — a carta continua na mão).
+     */
+    fun playTactical(
+        card: TacticalCard,
+        primary: Int? = null,
+        secondary: Int? = null,
+        amount: Int = 3,
+        targetPlayer: Int? = null
+    ): String? {
+        if (!canPlayTactical(card)) return null
+        val me = currentPlayerIndex
+
+        val report: String = when (card) {
+            TacticalCard.INFANTARIA -> {
+                reinforcements += 2
+                "Reforço de infantaria: +2 exércitos para distribuir."
+            }
+
+            TacticalCard.FORTIFICACAO -> {
+                val t = primary ?: return null
+                if (ownerOf[t] != me) return null
+                armiesOf[t] += 3
+                "+3 exércitos entrincheirados em ${MapData.territory(t).name}."
+            }
+
+            TacticalCard.PARAQUEDISTAS, TacticalCard.HELICOPTERO -> {
+                val from = primary ?: return null
+                val to = secondary ?: return null
+                if (to !in troopDestinations(card, from)) return null
+                val moved = amount.coerceIn(1, minOf(3, armiesOf[from] - 1))
+                if (moved < 1) return null
+                armiesOf[from] -= moved
+                armiesOf[to] += moved
+                "$moved exércitos de ${MapData.territory(from).name} chegaram a " +
+                    "${MapData.territory(to).name}."
+            }
+
+            TacticalCard.TANQUE -> {
+                attackDiceBonus = minOf(3, attackDiceBonus + 1)
+                "Blindados prontos: +1 no seu maior dado no próximo ataque."
+            }
+
+            TacticalCard.CACA -> {
+                attackDiceBonus = minOf(3, attackDiceBonus + 2)
+                "Superioridade aérea: +1 nos seus dois maiores dados no próximo ataque."
+            }
+
+            TacticalCard.NAVIO_DE_GUERRA -> {
+                seaRouteDiceBonus = minOf(3, seaRouteDiceBonus + 2)
+                "Frota posicionada: +1 nos dois maiores dados no próximo ataque " +
+                    "a outro continente."
+            }
+
+            TacticalCard.ARTILHARIA -> {
+                ignoreFortification = true
+                "Artilharia em posição: a fortificação do defensor não contará no " +
+                    "próximo ataque."
+            }
+
+            TacticalCard.ATAQUE_AEREO, TacticalCard.BOMBARDEIO -> {
+                val t = primary ?: return null
+                val valid = if (card == TacticalCard.ATAQUE_AEREO) airStrikeTargets()
+                else bombardTargets()
+                if (t !in valid) return null
+                val removed = minOf(2, armiesOf[t] - 1)
+                if (removed <= 0) return null
+                armiesOf[t] -= removed
+                "$removed exércitos inimigos destruídos em ${MapData.territory(t).name}."
+            }
+
+            TacticalCard.ESPIONAGEM -> {
+                val pid = targetPlayer ?: return null
+                if (pid !in rivals()) return null
+                val spy = players[pid]
+                val forts = territoriesOf(pid).count { fortificationOf(it) != Fortification.NENHUMA }
+                "${spy.name}: ${ownedCount(pid)} territórios, ${totalArmiesOf(pid)} exércitos, " +
+                    "${spy.cards.size} cartas de território, ${spy.tacticalCards.size} táticas " +
+                    "e $forts fortificações."
+            }
+
+            TacticalCard.SABOTAGEM -> {
+                val pid = targetPlayer ?: return null
+                if (pid !in rivals()) return null
+                continentBonusBlocked[pid] = true
+                "Linhas de suprimento de ${players[pid].name} sabotadas: sem bônus de " +
+                    "continentes no próximo reforço."
+            }
+
+            TacticalCard.DIPLOMACIA -> {
+                val pid = targetPlayer ?: return null
+                if (pid !in rivals()) return null
+                val until = turnNumber + players.size
+                truceUntil[me][pid] = until
+                truceUntil[pid][me] = until
+                "Trégua firmada com ${players[pid].name}."
+            }
+
+            TacticalCard.MARCHA_FORCADA -> {
+                extraFortifies++
+                "Marcha forçada: você ganhou um deslocamento adicional neste turno."
+            }
+        }
+
+        currentPlayer.tacticalCards.remove(card)
+        tacticalDiscard.add(card)
+        tacticalUsedThisRound[me]++
+        roundEvents.add("${currentPlayer.name} usou ${card.title}")
+        checkVictory()
+        return report
+    }
+
+    // ---------------------------------------------------------------------
+    // MEDALHAS, SNAPSHOT E RELATÓRIO DA RODADA
+    // ---------------------------------------------------------------------
+
+    private fun award(player: Player, medal: TacticalMedal) {
+        if (player.medals.add(medal)) {
+            roundEvents.add("${player.name} conquistou a medalha ${medal.title}")
+        }
+    }
+
+    /** Medalhas são registro histórico: não dão nenhuma vantagem em jogo. */
+    private fun checkMedals() {
+        if (!tactical) return
+        val alive = players.filter { !it.eliminated }
+        if (alive.isEmpty()) return
+        val leaderTerritories = alive.maxOf { ownedCount(it.id) }
+        val topArmies = alive.maxOf { totalArmiesOf(it.id) }
+        val soleArmyLeader = alive.count { totalArmiesOf(it.id) == topArmies } == 1
+        val soleTerritoryLeader = alive.count { ownedCount(it.id) == leaderTerritories } == 1
+
+        for (p in alive) {
+            val owned = ownedCount(p.id)
+            if (owned >= n) award(p, TacticalMedal.DOMINACAO_GLOBAL)
+            if (fullyOwnedContinents(p.id).isNotEmpty()) award(p, TacticalMedal.SUPREMACIA_CONTINENTAL)
+            if (owned >= 24) award(p, TacticalMedal.CONTROLE_DE_FRONTEIRAS)
+            if (eliminatedBy.any { it == p.id }) award(p, TacticalMedal.EXTERMINIO)
+            if (alive.size > 1 && soleArmyLeader && totalArmiesOf(p.id) == topArmies) {
+                award(p, TacticalMedal.SUPERIORIDADE_MILITAR)
+            }
+            if (p.cards.size >= 5) award(p, TacticalMedal.COLECIONADOR_DE_CARTAS)
+            if (leaderTerritories - owned >= 5) wasBehind[p.id] = true
+            if (wasBehind[p.id] && soleTerritoryLeader && owned == leaderTerritories) {
+                award(p, TacticalMedal.REVIRAVOLTA)
+            }
+        }
+    }
+
+    private fun snapshotOf(id: Int) = ArmySnapshot(
+        playerId = id,
+        territories = ownedCount(id),
+        armies = totalArmiesOf(id),
+        continents = fullyOwnedContinents(id).size,
+        territoryCards = players[id].cards.size,
+        tacticalCards = players[id].tacticalCards.size,
+        bunkers = territoriesOf(id).count { fortificationOf(it) == Fortification.BUNKER },
+        fortresses = territoriesOf(id).count { fortificationOf(it) == Fortification.FORTALEZA }
+    )
+
+    private fun takeSnapshot() {
+        snapshot = RoundSnapshot(roundNumber, players.map { snapshotOf(it.id) })
+    }
+
+    /**
+     * Fecha a rodada: compara a foto do início com a de agora e monta o
+     * relatório a partir do log de combate — nada é estimado.
+     */
+    private fun closeRound() {
+        val before = snapshot
+        val after = players.map { snapshotOf(it.id) }
+        if (before != null) {
+            val stats = players.map { p ->
+                val b = before.armies.getOrNull(p.id)
+                val a = after[p.id]
+                ArmyRoundStats(
+                    playerId = p.id,
+                    territoriesBefore = b?.territories ?: a.territories,
+                    territoriesAfter = a.territories,
+                    armiesBefore = b?.armies ?: a.armies,
+                    armiesAfter = a.armies,
+                    conquered = battleLog.count { it.conquered && it.attackerId == p.id },
+                    lost = battleLog.count { it.conquered && it.defenderId == p.id },
+                    casualtiesDealt = battleLog.sumOf {
+                        (if (it.attackerId == p.id) it.defenderLosses else 0) +
+                            (if (it.defenderId == p.id) it.attackerLosses else 0)
+                    },
+                    casualtiesTaken = battleLog.sumOf {
+                        (if (it.attackerId == p.id) it.attackerLosses else 0) +
+                            (if (it.defenderId == p.id) it.defenderLosses else 0)
+                    },
+                    bunkers = a.bunkers,
+                    fortresses = a.fortresses,
+                    tacticalUsed = tacticalUsedThisRound[p.id],
+                    momentum = momentumOf[p.id]
+                )
+            }
+            val events = mutableListOf<String>()
+            events.addAll(roundEvents)
+            players.forEach { p ->
+                val b = before.armies.getOrNull(p.id) ?: return@forEach
+                val a = after[p.id]
+                if (a.continents > b.continents) events.add("${p.name} dominou um novo continente")
+                if (a.continents < b.continents) events.add("${p.name} perdeu um continente")
+                if (a.fortresses > b.fortresses) events.add("Nova fortaleza erguida por ${p.name}")
+            }
+            lastRoundReport = RoundReport(roundNumber, stats, events.distinct().take(12))
+        }
+        roundNumber++
+        battleLog.clear()
+        roundEvents.clear()
+        for (i in tacticalUsedThisRound.indices) tacticalUsedThisRound[i] = 0
+        takeSnapshot()
+    }
+
+    // ---------------------------------------------------------------------
     // VITÓRIA
     // ---------------------------------------------------------------------
 
@@ -497,6 +970,47 @@ class GameEngine(
         line("elimBy", eliminatedBy.joinToString(","))
         line("draw", drawPile.joinToString(";") { cardToText(it) })
         line("discard", discardPile.joinToString(";") { cardToText(it) })
+
+        // --- estado da expansão tática (v4) ---
+        line("mode", mode.name)
+        line("turn", turnNumber.toString())
+        line("round", roundNumber.toString())
+        line("mom", momentumOf.joinToString(","))
+        line("momA", momentumApplied.toString())
+        line("conqT", conquestsThisTurn.toString())
+        line("xfort", extraFortifies.toString())
+        line("atkB", attackDiceBonus.toString())
+        line("seaB", seaRouteDiceBonus.toString())
+        line("ignF", if (ignoreFortification) "1" else "0")
+        line("sabot", continentBonusBlocked.joinToString(",") { if (it) "1" else "0" })
+        line("truce", truceUntil.joinToString(";") { row -> row.joinToString(",") })
+        line("behind", wasBehind.joinToString(",") { if (it) "1" else "0" })
+        line("tused", tacticalUsedThisRound.joinToString(","))
+        line("tdraw", tacticalDraw.joinToString(",") { it.ordinal.toString() })
+        line("tdisc", tacticalDiscard.joinToString(",") { it.ordinal.toString() })
+        snapshot?.let { snap ->
+            line("snapR", snap.roundNumber.toString())
+            line(
+                "snap",
+                snap.armies.joinToString(";") { a ->
+                    listOf(
+                        a.playerId, a.territories, a.armies, a.continents,
+                        a.territoryCards, a.tacticalCards, a.bunkers, a.fortresses
+                    ).joinToString(",")
+                }
+            )
+        }
+        line(
+            "blog",
+            battleLog.takeLast(MAX_SAVED_LOG).joinToString(";") { b ->
+                listOf(
+                    b.attackerId, b.defenderId, b.fromTerritoryId, b.toTerritoryId,
+                    b.attackerLosses, b.defenderLosses, if (b.conquered) 1 else 0,
+                    b.fortificationLevel, b.turnNumber
+                ).joinToString(",")
+            }
+        )
+
         line("np", players.size.toString())
         players.forEach { p ->
             val fields = listOf(
@@ -507,7 +1021,9 @@ class GameEngine(
                 if (p.eliminated) "1" else "0",
                 p.cards.joinToString(";") { cardToText(it) },
                 objectiveToText(p.objective),
-                p.avatarId.toString()
+                p.avatarId.toString(),
+                p.tacticalCards.joinToString(";") { it.ordinal.toString() },
+                p.medals.joinToString(";") { it.ordinal.toString() }
             )
             line("p", fields.joinToString(FS))
         }
@@ -515,7 +1031,20 @@ class GameEngine(
     }
 
     companion object {
-        const val SAVE_VERSION = 3
+        const val SAVE_VERSION = 4
+
+        /** Versões de save que o jogo ainda restaura (v3 volta como clássica). */
+        private val SUPPORTED_SAVES = intArrayOf(3, 4)
+
+        /** Teto do reforço extra de Momentum. */
+        const val MAX_MOMENTUM = 3
+
+        /** Máximo de cartas táticas na mão. */
+        const val TACTICAL_HAND_LIMIT = 4
+
+        /** Combates guardados no save (o log é da rodada, não da partida). */
+        private const val MAX_SAVED_LOG = 300
+
         private const val FS = "\u0001" // separador de campos
         private const val GS = "\u0002" // separador de grupos
 
@@ -526,6 +1055,11 @@ class GameEngine(
             if (p.size != 2) return null
             val sym = CardSymbol.entries.getOrNull(p[0].toIntOrNull() ?: return null) ?: return null
             return Card(sym, p[1].toIntOrNull() ?: return null)
+        }
+
+        private fun tacticalFromText(s: String?, sep: String = ";"): List<TacticalCard> {
+            if (s.isNullOrBlank()) return emptyList()
+            return s.split(sep).mapNotNull { TacticalCard.byId(it.trim().toIntOrNull() ?: -1) }
         }
 
         private fun cardsFromText(s: String): MutableList<Card> =
@@ -579,7 +1113,8 @@ class GameEngine(
                         .add(ln.substring(i + 1))
                 }
                 fun one(k: String): String? = map[k]?.firstOrNull()
-                if ((one("v")?.toIntOrNull() ?: 0) != SAVE_VERSION) return null
+                val version = one("v")?.toIntOrNull() ?: 0
+                if (version !in SUPPORTED_SAVES) return null
 
                 val rows = map["p"] ?: return null
                 if (rows.isEmpty()) return null
@@ -598,7 +1133,11 @@ class GameEngine(
                 val diff = runCatching {
                     Difficulty.valueOf(one("diff") ?: Difficulty.VETERANO.name)
                 }.getOrDefault(Difficulty.VETERANO)
-                val e = GameEngine(configs, diff, skipSetup = true)
+                // Saves v3 não conheciam modos: voltam como partida clássica.
+                val savedMode = runCatching {
+                    GameMode.valueOf(one("mode") ?: GameMode.CLASSICO.name)
+                }.getOrDefault(GameMode.CLASSICO)
+                val e = GameEngine(configs, diff, skipSetup = true, mode = savedMode)
 
                 parsed.forEachIndexed { idx, f ->
                     val p = e.players[idx]
@@ -606,6 +1145,12 @@ class GameEngine(
                     p.cards.clear()
                     p.cards.addAll(cardsFromText(f[5]))
                     p.objective = objectiveFromText(f[6])
+                    p.tacticalCards.clear()
+                    p.tacticalCards.addAll(tacticalFromText(f.getOrNull(8)))
+                    p.medals.clear()
+                    f.getOrNull(9)?.split(";")?.forEach { m ->
+                        TacticalMedal.byId(m.toIntOrNull() ?: -1)?.let { p.medals.add(it) }
+                    }
                 }
 
                 fun ints(k: String): List<Int> =
@@ -631,6 +1176,71 @@ class GameEngine(
                 e.drawPile.addAll(cardsFromText(one("draw") ?: ""))
                 e.discardPile.clear()
                 e.discardPile.addAll(cardsFromText(one("discard") ?: ""))
+
+                // --- expansão tática: ausente nos saves v3, entra zerada ---
+                e.turnNumber = one("turn")?.toIntOrNull() ?: 0
+                e.roundNumber = one("round")?.toIntOrNull() ?: 1
+                e.momentumApplied = one("momA")?.toIntOrNull() ?: 0
+                e.conquestsThisTurn = one("conqT")?.toIntOrNull() ?: 0
+                e.extraFortifies = one("xfort")?.toIntOrNull() ?: 0
+                e.attackDiceBonus = one("atkB")?.toIntOrNull() ?: 0
+                e.seaRouteDiceBonus = one("seaB")?.toIntOrNull() ?: 0
+                e.ignoreFortification = one("ignF") == "1"
+
+                ints("mom").forEachIndexed { i, v ->
+                    if (i < e.momentumOf.size) e.momentumOf[i] = v.coerceIn(0, MAX_MOMENTUM)
+                }
+                ints("tused").forEachIndexed { i, v ->
+                    if (i < e.tacticalUsedThisRound.size) e.tacticalUsedThisRound[i] = v
+                }
+                one("sabot")?.split(",")?.forEachIndexed { i, v ->
+                    if (i < e.continentBonusBlocked.size) e.continentBonusBlocked[i] = v == "1"
+                }
+                one("behind")?.split(",")?.forEachIndexed { i, v ->
+                    if (i < e.wasBehind.size) e.wasBehind[i] = v == "1"
+                }
+                one("truce")?.split(";")?.forEachIndexed { i, row ->
+                    if (i < e.truceUntil.size) {
+                        row.split(",").forEachIndexed { j, v ->
+                            if (j < e.truceUntil[i].size) {
+                                e.truceUntil[i][j] = v.trim().toIntOrNull() ?: 0
+                            }
+                        }
+                    }
+                }
+
+                e.tacticalDraw.clear()
+                e.tacticalDraw.addAll(tacticalFromText(one("tdraw"), ","))
+                e.tacticalDiscard.clear()
+                e.tacticalDiscard.addAll(tacticalFromText(one("tdisc"), ","))
+
+                e.battleLog.clear()
+                one("blog")?.split(";")?.forEach { row ->
+                    val f = row.split(",").mapNotNull { it.trim().toIntOrNull() }
+                    if (f.size == 9) {
+                        e.battleLog.add(
+                            BattleLogEntry(
+                                attackerId = f[0], defenderId = f[1],
+                                fromTerritoryId = f[2], toTerritoryId = f[3],
+                                attackerLosses = f[4], defenderLosses = f[5],
+                                conquered = f[6] == 1, fortificationLevel = f[7],
+                                turnNumber = f[8]
+                            )
+                        )
+                    }
+                }
+
+                val snapRows = one("snap")?.split(";")?.mapNotNull { row ->
+                    val f = row.split(",").mapNotNull { it.trim().toIntOrNull() }
+                    if (f.size == 8) {
+                        ArmySnapshot(f[0], f[1], f[2], f[3], f[4], f[5], f[6], f[7])
+                    } else null
+                }
+                e.snapshot = if (!snapRows.isNullOrEmpty()) {
+                    RoundSnapshot(one("snapR")?.toIntOrNull() ?: e.roundNumber, snapRows)
+                } else {
+                    RoundSnapshot(e.roundNumber, e.players.map { e.snapshotOf(it.id) })
+                }
 
                 return e
             } catch (t: Throwable) {

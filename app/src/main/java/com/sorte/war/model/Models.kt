@@ -51,7 +51,11 @@ data class Player(
     val avatarId: Int = 0,
     var eliminated: Boolean = false,
     val cards: MutableList<Card> = mutableListOf(),
-    var objective: Objective? = null
+    var objective: Objective? = null,
+    /** Mão do baralho tático (vazia no modo clássico). */
+    val tacticalCards: MutableList<TacticalCard> = mutableListOf(),
+    /** Medalhas táticas já conquistadas nesta partida. */
+    val medals: MutableSet<TacticalMedal> = mutableSetOf()
 )
 
 /** Tipos de objetivo secreto, fiéis às cartas do War. */
@@ -86,5 +90,7 @@ data class BattleResult(
     val defenderDice: List<Int>,
     val attackerLosses: Int,
     val defenderLosses: Int,
-    val conquered: Boolean
+    val conquered: Boolean,
+    /** Nível de fortificação que reforçou a defesa (0 fora do modo tático). */
+    val fortificationLevel: Int = 0
 )
