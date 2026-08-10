@@ -51,11 +51,15 @@ object Ai {
     }
 
     /**
-     * Força de defesa considerada pela IA: tropas somadas ao efeito da
-     * fortificação. Um bunker com 8 tropas "vale" 10 na hora de decidir.
+     * Força de defesa considerada pela IA: tropas mais o peso da fortificação.
+     *
+     * O bônus vale meio exército por dado (posto e bunker +1, fortaleza +2).
+     * Somar o valor cheio deixava a IA cautelosa paralisada em partidas de dois
+     * exércitos, onde os dois lados crescem no mesmo ritmo e a diferença exigida
+     * nunca aparecia.
      */
     private fun effectiveDefense(engine: GameEngine, t: Int): Int =
-        engine.armiesOf[t] + engine.fortificationOf(t).defenseDice
+        engine.armiesOf[t] + (engine.fortificationOf(t).defenseDice + 1) / 2
 
     /** Com que frequência a IA gasta cartas táticas, conforme a dificuldade. */
     private fun cardAppetite(difficulty: Difficulty): Float = when (difficulty) {
@@ -256,8 +260,13 @@ object Ai {
             for (to in engine.attackTargets(from)) {
                 // no tático a fortificação entra na conta; no clássico ela é 0
                 val advantage = engine.armiesOf[from] - effectiveDefense(engine, to)
+                val rawAdvantage = engine.armiesOf[from] - engine.armiesOf[to]
+                // Válvula: uma superioridade numérica gritante justifica o
+                // ataque mesmo contra uma fortaleza. Sem isso, dois exércitos
+                // cautelosos crescem em paralelo e a partida nunca termina.
+                val worthIt = advantage >= minAdvantage || rawAdvantage >= minAdvantage + 3
                 if (engine.armiesOf[from] >= minForce &&
-                    advantage >= minAdvantage &&
+                    worthIt &&
                     advantage > bestAdvantage
                 ) {
                     bestAdvantage = advantage
