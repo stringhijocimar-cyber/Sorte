@@ -1,8 +1,11 @@
 package com.sorte.war.engine
 
 import com.sorte.war.model.Card
+import com.sorte.war.model.Difficulty
+import com.sorte.war.model.Fortification
 import com.sorte.war.model.MapData
 import com.sorte.war.model.Phase
+import com.sorte.war.model.TacticalCard
 import kotlin.random.Random
 
 /**
@@ -10,6 +13,10 @@ import kotlin.random.Random
  * com uma estratégia simples porém competente: reforça as fronteiras mais
  * pressionadas, ataca quando tem vantagem numérica e desloca tropas do
  * interior para a linha de frente.
+ *
+ * No modo Tático ela ainda mede a **força efetiva** do defensor (tropas mais
+ * o efeito da fortificação), procura subir os próprios territórios de nível e
+ * usa cartas táticas — com uma frequência que depende da dificuldade.
  */
 object Ai {
 
@@ -19,6 +26,7 @@ object Ai {
         if (engine.phase == Phase.FIM_DE_JOGO) return
         doReinforce(engine)
         engine.advancePhase() // -> ATAQUE
+        playAttackCards(engine)
         doAttacks(engine)
         if (engine.phase == Phase.FIM_DE_JOGO) return
         engine.advancePhase() // -> DESLOCAMENTO
@@ -42,6 +50,24 @@ object Ai {
             .maxOfOrNull { engine.armiesOf[it] } ?: 0
     }
 
+    /**
+     * Força de defesa considerada pela IA: tropas somadas ao efeito da
+     * fortificação. Um bunker com 8 tropas "vale" 10 na hora de decidir.
+     */
+    private fun effectiveDefense(engine: GameEngine, t: Int): Int =
+        engine.armiesOf[t] + engine.fortificationOf(t).defenseDice
+
+    /** Com que frequência a IA gasta cartas táticas, conforme a dificuldade. */
+    private fun cardAppetite(difficulty: Difficulty): Float = when (difficulty) {
+        Difficulty.RECRUTA -> 0.25f
+        Difficulty.VETERANO -> 0.55f
+        Difficulty.GENERAL -> 0.80f
+        Difficulty.MARECHAL -> 1.00f
+    }
+
+    private fun wants(engine: GameEngine): Boolean =
+        rng.nextFloat() < cardAppetite(engine.difficulty)
+
     // ---------------- Reforço ----------------
 
     private fun doReinforce(engine: GameEngine) {
@@ -54,6 +80,8 @@ object Ai {
             } else break
         }
 
+        playReinforceCards(engine)
+
         val front = borders(engine)
         var guard2 = 0
         while (engine.reinforcements > 0 && guard2++ < 500) {
@@ -63,12 +91,30 @@ object Ai {
                 if (any != null) engine.reinforce(any, engine.reinforcements) else break
                 break
             }
-            // Reforça a fronteira mais pressionada (maior défice frente ao inimigo).
-            val target = front.maxByOrNull {
-                maxEnemyNeighborArmies(engine, it) - engine.armiesOf[it] + rng.nextInt(2)
-            } ?: front.first()
+            val target = pickReinforceTarget(engine, front)
             engine.reinforce(target, 1)
         }
+    }
+
+    /**
+     * Escolhe onde colocar o próximo exército. No modo tático, um território a
+     * um passo de virar Bunker ou Fortaleza ganha preferência: concentrar vale
+     * mais do que espalhar.
+     */
+    private fun pickReinforceTarget(engine: GameEngine, front: List<Int>): Int {
+        return front.maxByOrNull { t ->
+            val pressure = maxEnemyNeighborArmies(engine, t) - engine.armiesOf[t]
+            val upgrade = if (engine.tactical && nextLevelAt(engine.armiesOf[t]) == 1) 3 else 0
+            pressure + upgrade + rng.nextInt(2)
+        } ?: front.first()
+    }
+
+    /** Quantos exércitos faltam para o território subir de nível defensivo. */
+    private fun nextLevelAt(armies: Int): Int = when {
+        armies >= Fortification.FORTALEZA.minArmies -> Int.MAX_VALUE
+        armies >= Fortification.BUNKER.minArmies -> Fortification.FORTALEZA.minArmies - armies
+        armies >= Fortification.POSTO.minArmies -> Fortification.BUNKER.minArmies - armies
+        else -> Fortification.POSTO.minArmies - armies
     }
 
     private fun findValidSet(engine: GameEngine): List<Card>? {
@@ -82,31 +128,151 @@ object Ai {
         return null
     }
 
+    // ---------------- Cartas táticas ----------------
+
+    private fun hand(engine: GameEngine): List<TacticalCard> =
+        engine.currentPlayer.tacticalCards.toList()
+
+    /** Cartas jogadas na fase de reforço. */
+    private fun playReinforceCards(engine: GameEngine) {
+        if (!engine.tactical) return
+        val p = me(engine)
+
+        for (card in hand(engine)) {
+            if (!engine.canPlayTactical(card)) continue
+            if (!wants(engine)) continue
+            when (card) {
+                TacticalCard.INFANTARIA -> engine.playTactical(card)
+
+                TacticalCard.FORTIFICACAO -> {
+                    // entrincheira onde a pressão inimiga é maior
+                    val target = borders(engine).maxByOrNull {
+                        maxEnemyNeighborArmies(engine, it) - engine.armiesOf[it]
+                    } ?: continue
+                    engine.playTactical(card, primary = target)
+                }
+
+                TacticalCard.SABOTAGEM -> {
+                    // sabota quem tem mais continentes para perder
+                    val target = engine.rivals().maxByOrNull {
+                        engine.fullyOwnedContinents(it).size * 10 + engine.ownedCount(it)
+                    } ?: continue
+                    if (engine.fullyOwnedContinents(target).isEmpty()) continue
+                    engine.playTactical(card, targetPlayer = target)
+                }
+
+                TacticalCard.DIPLOMACIA -> {
+                    // trégua só faz sentido quando a IA está em desvantagem
+                    val mine = engine.ownedCount(p)
+                    val threat = engine.rivals().maxByOrNull { engine.ownedCount(it) } ?: continue
+                    if (engine.ownedCount(threat) <= mine + 3) continue
+                    engine.playTactical(card, targetPlayer = threat)
+                }
+
+                TacticalCard.PARAQUEDISTAS -> {
+                    // reposiciona tropas paradas no interior para a linha de frente
+                    val from = engine.troopSources().maxByOrNull { t ->
+                        if (MapData.territory(t).neighbors.all { engine.ownerOf[it] == p })
+                            engine.armiesOf[t] else 0
+                    } ?: continue
+                    if (MapData.territory(from).neighbors.any { engine.ownerOf[it] != p }) continue
+                    val to = engine.troopDestinations(card, from).maxByOrNull {
+                        maxEnemyNeighborArmies(engine, it) - engine.armiesOf[it]
+                    } ?: continue
+                    engine.playTactical(card, primary = from, secondary = to)
+                }
+
+                else -> {}
+            }
+        }
+    }
+
+    /** Cartas jogadas antes de atacar. */
+    private fun playAttackCards(engine: GameEngine) {
+        if (!engine.tactical || engine.phase != Phase.ATAQUE) return
+
+        for (card in hand(engine)) {
+            if (!engine.canPlayTactical(card)) continue
+            if (!wants(engine)) continue
+            when (card) {
+                TacticalCard.ATAQUE_AEREO, TacticalCard.BOMBARDEIO -> {
+                    // enfraquece a fortificação inimiga mais dura da fronteira
+                    val valid = if (card == TacticalCard.ATAQUE_AEREO) engine.airStrikeTargets()
+                    else engine.bombardTargets()
+                    val target = valid.maxByOrNull { effectiveDefense(engine, it) } ?: continue
+                    engine.playTactical(card, primary = target)
+                }
+
+                TacticalCard.ARTILHARIA -> {
+                    // só vale contra defensor fortificado
+                    val hasFort = bestAttack(engine)?.let { (_, to) ->
+                        engine.fortificationOf(to) != Fortification.NENHUMA
+                    } ?: false
+                    if (hasFort) engine.playTactical(card)
+                }
+
+                TacticalCard.TANQUE, TacticalCard.CACA -> {
+                    // reforça o dado quando o combate está apertado
+                    val move = bestAttack(engine) ?: continue
+                    val margin = engine.armiesOf[move.first] - effectiveDefense(engine, move.second)
+                    if (margin in 0..3) engine.playTactical(card)
+                }
+
+                TacticalCard.NAVIO_DE_GUERRA -> {
+                    val move = bestAttack(engine) ?: continue
+                    val sea = MapData.territory(move.first).continentId !=
+                        MapData.territory(move.second).continentId
+                    if (sea) engine.playTactical(card)
+                }
+
+                TacticalCard.HELICOPTERO -> {
+                    // junta tropas de um vizinho tranquilo com a fronteira quente
+                    val to = borders(engine).maxByOrNull {
+                        maxEnemyNeighborArmies(engine, it) - engine.armiesOf[it]
+                    } ?: continue
+                    val from = MapData.territory(to).neighbors.firstOrNull { nb ->
+                        engine.ownerOf[nb] == me(engine) && engine.armiesOf[nb] > 3 &&
+                            to in engine.troopDestinations(card, nb)
+                    } ?: continue
+                    engine.playTactical(card, primary = from, secondary = to)
+                }
+
+                else -> {}
+            }
+        }
+    }
+
     // ---------------- Ataque ----------------
+
+    /** Melhor par (origem, alvo) segundo a força efetiva do defensor. */
+    private fun bestAttack(engine: GameEngine): Pair<Int, Int>? {
+        val p = me(engine)
+        val minForce = engine.difficulty.minArmiesToAttack
+        val minAdvantage = engine.difficulty.attackThreshold
+        var best: Pair<Int, Int>? = null
+        var bestAdvantage = Int.MIN_VALUE
+        for (from in engine.territoriesOf(p)) {
+            if (engine.armiesOf[from] < 2) continue
+            for (to in engine.attackTargets(from)) {
+                // no tático a fortificação entra na conta; no clássico ela é 0
+                val advantage = engine.armiesOf[from] - effectiveDefense(engine, to)
+                if (engine.armiesOf[from] >= minForce &&
+                    advantage >= minAdvantage &&
+                    advantage > bestAdvantage
+                ) {
+                    bestAdvantage = advantage
+                    best = from to to
+                }
+            }
+        }
+        return best
+    }
 
     private fun doAttacks(engine: GameEngine) {
         val p = me(engine)
         var guard = 0
         while (guard++ < 200 && engine.phase == Phase.ATAQUE) {
-            val minForce = engine.difficulty.minArmiesToAttack
-            val minAdvantage = engine.difficulty.attackThreshold
-            var best: Pair<Int, Int>? = null
-            var bestAdvantage = Int.MIN_VALUE
-            for (from in engine.territoriesOf(p)) {
-                if (engine.armiesOf[from] < 2) continue
-                for (to in engine.attackTargets(from)) {
-                    val advantage = engine.armiesOf[from] - engine.armiesOf[to]
-                    // A agressividade depende do nível de dificuldade escolhido.
-                    if (engine.armiesOf[from] >= minForce &&
-                        advantage >= minAdvantage &&
-                        advantage > bestAdvantage
-                    ) {
-                        bestAdvantage = advantage
-                        best = from to to
-                    }
-                }
-            }
-            val move = best ?: break
+            val move = bestAttack(engine) ?: break
             val (from, to) = move
             val other = MapData.territory(from).neighbors.any {
                 it != to && engine.ownerOf[it] != p
@@ -122,6 +288,21 @@ object Ai {
 
     private fun doFortify(engine: GameEngine) {
         if (engine.phase != Phase.DESLOCAMENTO) return
+        // Marcha Forçada rende um movimento a mais: vale a pena antes de deslocar.
+        if (engine.tactical) {
+            val march = hand(engine).firstOrNull { it == TacticalCard.MARCHA_FORCADA }
+            if (march != null && engine.canPlayTactical(march) && wants(engine)) {
+                engine.playTactical(march)
+            }
+        }
+
+        var guard = 0
+        while (engine.canFortifyNow() && guard++ < 4) {
+            if (!moveOneStack(engine)) break
+        }
+    }
+
+    private fun moveOneStack(engine: GameEngine): Boolean {
         val p = me(engine)
         // Território interior (sem inimigos vizinhos) com mais tropas sobrando.
         val interiors = engine.territoriesOf(p)
@@ -137,9 +318,9 @@ object Ai {
             }
             val to = reachableBorders.maxByOrNull { maxEnemyNeighborArmies(engine, it) }
             if (to != null) {
-                engine.fortify(from, to, engine.armiesOf[from] - 1)
-                return
+                return engine.fortify(from, to, engine.armiesOf[from] - 1)
             }
         }
+        return false
     }
 }
