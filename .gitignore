@@ -1,0 +1,27 @@
+# Gradle
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+
+# Android / IDE
+local.properties
+*.iml
+.idea/
+.cxx/
+captures/
+.externalNativeBuild/
+
+# Build outputs
+app/build/
+*.apk
+*.aab
+*.ap_
+*.dex
+
+# Logs / OS
+*.log
+.DS_Store
+
+# Backup gerado pelo script de redesign de UI
+.premium-ui-backup/
+.premium-ui-v2-backup/
