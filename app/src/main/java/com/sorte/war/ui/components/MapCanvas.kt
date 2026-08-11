@@ -15,8 +15,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -24,6 +27,11 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.res.imageResource
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
+import com.sorte.war.R
+import com.sorte.war.model.Fortification
 import com.sorte.war.engine.GameEngine
 import com.sorte.war.model.MapData
 import kotlin.math.hypot
@@ -41,6 +49,12 @@ fun MapCanvas(
     modifier: Modifier = Modifier
 ) {
     @Suppress("UNUSED_EXPRESSION") refresh
+
+    // Recursos carregados uma vez e reaproveitados em todos os quadros.
+    val terrain = ImageBitmap.imageResource(R.drawable.map_terrain)
+    val outpost = ImageBitmap.imageResource(R.drawable.fortification_outpost)
+    val bunker = ImageBitmap.imageResource(R.drawable.fortification_bunker)
+    val fortress = ImageBitmap.imageResource(R.drawable.fortification_fortress)
 
     var userScale by remember { mutableFloatStateOf(1f) }
     var panX by remember { mutableFloatStateOf(0f) }
@@ -67,7 +81,7 @@ fun MapCanvas(
     Canvas(
         modifier = modifier
             .fillMaxSize()
-            .background(Brush.verticalGradient(listOf(Color(0xFF08232D), Color(0xFF05131A), Color(0xFF03070B))))
+            .background(Brush.verticalGradient(listOf(Color(0xFF0C3243), Color(0xFF072030), Color(0xFF04121C))))
             .pointerInput(Unit) {
                 detectTransformGestures { _, pan, zoom, _ ->
                     userScale = (userScale * zoom).coerceIn(1f, 6f)
@@ -98,10 +112,16 @@ fun MapCanvas(
         val s = baseScale(size) * userScale
         val proj = { x: Float, y: Float -> project(size, x, y) }
 
+        drawOceanDepth(size, proj)
         drawWatermark(size)
         drawOceanGrid(proj)
         drawRoutes(proj)
         drawLandmasses(engine, selectedTerritory, validTargets, s, proj)
+        // Textura de relevo por cima de tudo, num único blit: dá granulação
+        // ao terreno e ao mar sem custar 42 desenhos por quadro.
+        drawTerrainTexture(terrain, size)
+        drawOceanNames(s, proj)
+        drawFortifications(engine, s, proj, outpost, bunker, fortress)
         drawLabels(engine, s, proj)
         drawContinentBadges(s, proj)
     }
@@ -150,6 +170,87 @@ private fun DrawScope.drawWatermark(size: Size) {
         val rx = r * kotlin.math.sqrt(1f - f * f)
         drawLine(ink, Offset(cx - rx, cy - r * f), Offset(cx + rx, cy - r * f), strokeWidth = r * 0.035f)
         drawLine(ink, Offset(cx - rx, cy + r * f), Offset(cx + rx, cy + r * f), strokeWidth = r * 0.035f)
+    }
+}
+
+/**
+ * Profundidade do mar: manchas mais claras nas plataformas continentais e
+ * escurecimento nas bordas da tela, para o mapa parecer uma mesa iluminada.
+ */
+private fun DrawScope.drawOceanDepth(size: Size, project: (Float, Float) -> Offset) {
+    // bancos rasos junto às massas de terra
+    val shelves = listOf(
+        Triple(360f, 150f, 190f),   // Atlântico norte
+        Triple(700f, 250f, 210f),   // Índico
+        Triple(120f, 120f, 170f),   // Pacífico leste
+        Triple(900f, 150f, 200f)    // Pacífico oeste
+    )
+    for ((x, y, r) in shelves) {
+        val c = project(x, y)
+        val rr = r * (size.width / VW)
+        drawCircle(
+            Brush.radialGradient(
+                listOf(Color(0x3A1C6B7A), Color(0x001C6B7A)),
+                center = c, radius = rr
+            ),
+            radius = rr, center = c
+        )
+    }
+    // vinheta
+    val maxR = kotlin.math.max(size.width, size.height) * 0.78f
+    drawCircle(
+        Brush.radialGradient(
+            listOf(Color(0x00000000), Color(0x00000000), Color(0x5A000814)),
+            center = Offset(size.width / 2f, size.height / 2f), radius = maxR
+        ),
+        radius = maxR, center = Offset(size.width / 2f, size.height / 2f)
+    )
+}
+
+/** Nomes dos oceanos, discretos, para não competirem com o mapa. */
+private fun DrawScope.drawOceanNames(s: Float, project: (Float, Float) -> Offset) {
+    val paint = Paint().apply {
+        color = android.graphics.Color.argb(64, 168, 214, 224)
+        textAlign = Paint.Align.CENTER
+        textSize = 8.5f * s
+        typeface = Typeface.create(Typeface.SERIF, Typeface.ITALIC)
+        isAntiAlias = true
+        letterSpacing = 0.28f
+    }
+    val names = listOf(
+        Triple("MAR ÁRTICO", 480f, 16f),
+        Triple("OCEANO ATLÂNTICO", 395f, 190f),
+        Triple("OCEANO PACÍFICO", 88f, 250f),
+        Triple("OCEANO PACÍFICO", 952f, 205f),
+        Triple("OCEANO ÍNDICO", 680f, 320f)
+    )
+    for ((text, x, y) in names) {
+        val p = project(x, y)
+        drawContext.canvas.nativeCanvas.drawText(text, p.x, p.y, paint)
+    }
+}
+
+/**
+ * Granulação de relevo aplicada sobre o mapa inteiro em uma passada só.
+ * BlendMode.Overlay escurece o que é escuro e clareia o que é claro, então a
+ * textura acompanha o terreno em vez de cobri-lo.
+ */
+private fun DrawScope.drawTerrainTexture(texture: ImageBitmap, size: Size) {
+    val tile = 260f
+    val cols = kotlin.math.ceil(size.width / tile).toInt() + 1
+    val rows = kotlin.math.ceil(size.height / tile).toInt() + 1
+    for (r in 0 until rows) {
+        for (c in 0 until cols) {
+            drawImage(
+                image = texture,
+                srcOffset = IntOffset.Zero,
+                srcSize = IntSize(texture.width, texture.height),
+                dstOffset = IntOffset((c * tile).toInt(), (r * tile).toInt()),
+                dstSize = IntSize(tile.toInt(), tile.toInt()),
+                alpha = 0.30f,
+                blendMode = BlendMode.Overlay
+            )
+        }
     }
 }
 
@@ -209,7 +310,7 @@ private fun DrawScope.drawLandmasses(
             // relevo: luz vinda do noroeste
             drawCircle(
                 Brush.radialGradient(
-                    listOf(Color(0x40FFFFFF), Color(0x00FFFFFF)),
+                    listOf(Color(0x4CFFFFFF), Color(0x00FFFFFF)),
                     center = Offset(center.x - 14f * s, center.y - 16f * s),
                     radius = 46f * s
                 ),
@@ -219,15 +320,17 @@ private fun DrawScope.drawLandmasses(
             // sombra do relevo a sudeste
             drawCircle(
                 Brush.radialGradient(
-                    listOf(Color(0x38000000), Color(0x00000000)),
+                    listOf(Color(0x48000000), Color(0x00000000)),
                     center = Offset(center.x + 16f * s, center.y + 18f * s),
                     radius = 44f * s
                 ),
                 radius = 44f * s,
                 center = Offset(center.x + 16f * s, center.y + 18f * s)
             )
-            // cor do exército — translúcida, deixando ver o mapa
-            drawRect(ownerColor.copy(alpha = 0.68f))
+            // Cor do exército puxada para um tom terroso antes de entrar como
+            // véu: a cor pura, mesmo translúcida, chapava o relevo.
+            val muted = lerp(ownerColor, Color(0xFF6E6A52), 0.34f)
+            drawRect(muted.copy(alpha = 0.52f))
 
             // fronteiras internas dos países que compõem o território
             val subs = MapData.subShapesOf(t.id)
@@ -249,12 +352,13 @@ private fun DrawScope.drawLandmasses(
             }
         }
 
-        // fronteiras
-        drawPath(path, Color(0xFF050B10), style = Stroke(width = 1.75f))
+        // Fronteira: sombra externa fina e linha dourada envelhecida por cima.
+        drawPath(path, Color(0xCC030910), style = Stroke(width = 2.6f))
+        drawPath(path, Color(0xB8C9A96A), style = Stroke(width = 1.1f))
         when {
             t.id == selected -> {
                 drawPath(path, Color(0x55E8B85A), style = Stroke(width = 7f))
-                drawPath(path, Color(0xFFF0C46A), style = Stroke(width = 2.8f))
+                drawPath(path, Color(0xFFF3CB77), style = Stroke(width = 2.8f))
             }
             t.id in validTargets -> {
                 drawPath(path, Color(0x4458B77B), style = Stroke(width = 6f))
@@ -299,82 +403,80 @@ private fun DrawScope.drawLabels(
         val ownerColor = if (owner >= 0) Color(engine.players[owner].colorArgb) else Color.Gray
         val armies = engine.armiesOf[t.id]
 
-        // fortificação conforme o contingente (mesmos limiares da regra tática)
-        val fortification = com.sorte.war.model.Fortification.forArmies(armies)
-        val level = fortification.level
-        if (level > 0) {
-            drawStructure(level, Offset(c.x, c.y - 13f * s), s, ownerColor)
-            // no modo tático o selo dourado marca que a defesa está reforçada
-            if (engine.tactical) {
-                drawCircle(
-                    Color(0xFFE8B85A),
-                    radius = 2.2f * s,
-                    center = Offset(c.x + 11f * s, c.y - 15f * s)
-                )
-            }
-        }
-
         drawContext.canvas.nativeCanvas.drawText(t.name, c.x, c.y - 15f * s, namePaint)
 
-        val badgeR = 10f * s
-        drawCircle(Color(0xF2050A0F), radius = badgeR, center = c)
-        drawCircle(ownerColor, radius = badgeR, center = c, style = Stroke(width = 2f))
+        // Emblema de tropas: metal escuro, aro dourado e um filete na cor do
+        // exército, para o número continuar legível no zoom mínimo.
+        val badgeR = 10.5f * s
+        drawCircle(Color(0x99000000), radius = badgeR * 1.16f, center = Offset(c.x, c.y + 1.4f * s))
+        drawCircle(
+            Brush.radialGradient(
+                listOf(Color(0xFF243240), Color(0xFF070D14)),
+                center = Offset(c.x - badgeR * 0.35f, c.y - badgeR * 0.4f),
+                radius = badgeR * 1.7f
+            ),
+            radius = badgeR, center = c
+        )
+        drawCircle(ownerColor.copy(alpha = 0.85f), radius = badgeR, center = c, style = Stroke(width = 2.4f))
+        drawCircle(Color(0xCCE8B85A), radius = badgeR - 2.2f, center = c, style = Stroke(width = 0.9f))
         drawContext.canvas.nativeCanvas.drawText(armies.toString(), c.x, c.y + 4.2f * s, armyPaint)
     }
 }
 
-/** Posto avançado (1), forte (2) ou fortaleza (3). */
-private fun DrawScope.drawStructure(level: Int, c: Offset, u: Float, accent: Color) {
-    val stone = Color(0xFF59636E)
-    val dark = Color(0xFF2F363E)
+/**
+ * Estruturas militares no mapa, em 2.5D.
+ *
+ * O sprite é escalado pelo nível e limitado por baixo e por cima: no zoom
+ * mínimo continua reconhecível, no zoom alto não vira um outdoor. Fica um
+ * pouco acima e à esquerda do emblema de tropas, para não cobrir o número.
+ */
+private fun DrawScope.drawFortifications(
+    engine: GameEngine,
+    s: Float,
+    project: (Float, Float) -> Offset,
+    outpost: ImageBitmap,
+    bunker: ImageBitmap,
+    fortress: ImageBitmap
+) {
+    for (t in MapData.territories) {
+        val fort = Fortification.forArmies(engine.armiesOf[t.id])
+        if (fort == Fortification.NENHUMA) continue
 
-    fun merlons(x0: Float, top: Float, w: Float, count: Int) {
-        val mw = w / (count * 2 - 1)
-        var x = x0
-        repeat(count) {
-            drawRect(stone, topLeft = Offset(x, top - mw), size = Size(mw, mw))
-            x += mw * 2
+        val sprite = when (fort) {
+            Fortification.POSTO -> outpost
+            Fortification.BUNKER -> bunker
+            else -> fortress
         }
-    }
-    fun tower(cx: Float, baseY: Float, w: Float, h: Float) {
-        val top = baseY - h
-        drawRect(stone, topLeft = Offset(cx - w / 2, top), size = Size(w, h))
-        drawRect(dark, topLeft = Offset(cx - w / 2, top), size = Size(w, h), style = Stroke(1f))
-        merlons(cx - w / 2, top, w, 3)
-    }
-    fun flag(cx: Float, topY: Float, h: Float) {
-        drawLine(Color(0xFFE8ECEF), Offset(cx, topY), Offset(cx, topY - h), strokeWidth = 1.4f)
-        val p = Path().apply {
-            moveTo(cx, topY - h)
-            lineTo(cx + h * 0.75f, topY - h + h * 0.30f)
-            lineTo(cx, topY - h + h * 0.56f)
-            close()
+        val baseSize = when (fort) {
+            Fortification.POSTO -> 34f
+            Fortification.BUNKER -> 41f
+            else -> 50f
         }
-        drawPath(p, accent)
-    }
+        val side = (baseSize * s).coerceIn(24f, 150f)
+        val c = project(t.x, t.y)
+        val left = c.x - side / 2f
+        val top = c.y - side * 0.92f
 
-    when (level) {
-        1 -> {
-            tower(c.x, c.y + 4f * u, 6f * u, 9f * u)
-            flag(c.x, c.y + 4f * u - 9f * u, 7f * u)
+        val owner = engine.ownerOf[t.id]
+        if (owner >= 0) {
+            // halo na cor do exército: diz de quem é a estrutura sem bandeira
+            drawCircle(
+                Brush.radialGradient(
+                    listOf(Color(engine.players[owner].colorArgb).copy(alpha = 0.30f), Color.Transparent),
+                    center = Offset(c.x, top + side * 0.72f), radius = side * 0.52f
+                ),
+                radius = side * 0.52f, center = Offset(c.x, top + side * 0.72f)
+            )
         }
-        2 -> {
-            val ww = 13f * u; val wh = 6.5f * u; val top = c.y + 4f * u - wh
-            drawRect(stone, topLeft = Offset(c.x - ww / 2, top), size = Size(ww, wh))
-            drawRect(dark, topLeft = Offset(c.x - ww / 2, top), size = Size(ww, wh), style = Stroke(1f))
-            merlons(c.x - ww / 2, top, ww, 4)
-            tower(c.x + ww / 2 - 2f * u, c.y + 4f * u, 6f * u, 12f * u)
-            flag(c.x + ww / 2 - 2f * u, c.y + 4f * u - 12f * u, 7f * u)
-        }
-        else -> {
-            val ww = 18f * u; val wh = 7f * u; val top = c.y + 4f * u - wh
-            drawRect(stone, topLeft = Offset(c.x - ww / 2, top), size = Size(ww, wh))
-            drawRect(dark, topLeft = Offset(c.x - ww / 2, top), size = Size(ww, wh), style = Stroke(1f))
-            merlons(c.x - ww / 2, top, ww, 5)
-            tower(c.x - ww / 2, c.y + 4f * u, 6.5f * u, 13f * u)
-            tower(c.x + ww / 2, c.y + 4f * u, 6.5f * u, 13f * u)
-            flag(c.x, c.y + 4f * u - wh, 9f * u)
-        }
+
+        drawImage(
+            image = sprite,
+            srcOffset = IntOffset.Zero,
+            srcSize = IntSize(sprite.width, sprite.height),
+            dstOffset = IntOffset(left.toInt(), top.toInt()),
+            dstSize = IntSize(side.toInt(), side.toInt()),
+            alpha = 0.97f
+        )
     }
 }
 
