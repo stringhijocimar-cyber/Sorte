@@ -100,10 +100,10 @@ fun MapCanvas(
             .background(
                 Brush.verticalGradient(
                     listOf(
-                        Color(0xFF092A35),
-                        Color(0xFF061B24),
-                        Color(0xFF030D13),
-                        Color(0xFF02070A)
+                        Color(0xFF0B2B3A),
+                        Color(0xFF082330),
+                        Color(0xFF061A25),
+                        Color(0xFF04121B)
                     )
                 )
             )
@@ -188,8 +188,8 @@ private fun DrawScope.drawOceanAtmosphere(size: Size) {
     drawRect(
         brush = Brush.radialGradient(
             colors = listOf(
-                Color(0x183B9AA4),
-                Color(0x0D17616C),
+                Color(0x142F7E92),
+                Color(0x0A114C5E),
                 Color.Transparent
             ),
             center = Offset(size.width * 0.48f, size.height * 0.36f),
@@ -200,12 +200,22 @@ private fun DrawScope.drawOceanAtmosphere(size: Size) {
     drawRect(
         brush = Brush.linearGradient(
             colors = listOf(
-                Color(0x001F7D89),
-                Color(0x160C4652),
+                Color(0x00196C7C),
+                Color(0x14093C4A),
                 Color(0x00000000)
             ),
             start = Offset(0f, 0f),
             end = Offset(size.width, size.height)
+        )
+    )
+
+    // Tinta de carta náutica: um véu quente, quase imperceptível, que tira o
+    // azul da televisão e aproxima do papel envelhecido da referência.
+    drawRect(
+        brush = Brush.radialGradient(
+            colors = listOf(Color(0x0FB98F4E), Color(0x078A6A38), Color.Transparent),
+            center = Offset(size.width * 0.5f, size.height * 0.52f),
+            radius = maxOf(size.width, size.height) * 0.62f
         )
     )
 }
@@ -215,7 +225,7 @@ private fun DrawScope.drawWatermark(size: Size) {
     val cx = size.width * 0.50f
     val cy = size.height * 0.51f
     val r = minOf(size.width, size.height) * 0.31f
-    val ink = Color(0xFF6CB7B3).copy(alpha = 0.032f)
+    val ink = Color(0xFFC0965A).copy(alpha = 0.040f)
 
     val len = r * 1.34f
     drawLine(ink, Offset(cx - len, cy + len), Offset(cx + len, cy - len), strokeWidth = r * 0.075f)
@@ -233,8 +243,8 @@ private fun DrawScope.drawWatermark(size: Size) {
 }
 
 private fun DrawScope.drawOceanGrid(project: (Float, Float) -> Offset) {
-    val major = Color(0x176CB7B3)
-    val minor = Color(0x0B6CB7B3)
+    val major = Color(0x14B08A4A)
+    val minor = Color(0x0A8FA9AE)
 
     var gx = 0f
     var index = 0
@@ -395,12 +405,17 @@ private fun DrawScope.drawLandmasses(
                 )
             )
 
+            // A cor do dono entra ANTES do relevo. Assim o território assume o
+            // pigmento do exército (como na referência) e o relevo desenhado em
+            // seguida continua legível por cima, em vez de ser encoberto.
+            drawRect(pigment(ownerColor).copy(alpha = 0.62f))
+
             drawTerrainRelief(t.id, t.continentId, center, s, terrain)
 
             // Luz de altitude vindo do noroeste.
             drawCircle(
                 brush = Brush.radialGradient(
-                    listOf(Color(0x36FFF0C0), Color(0x12FFFFFF), Color.Transparent),
+                    listOf(Color(0x30FFF0C0), Color(0x10FFFFFF), Color.Transparent),
                     center = Offset(center.x - 20f * s, center.y - 25f * s),
                     radius = 60f * s
                 ),
@@ -411,16 +426,13 @@ private fun DrawScope.drawLandmasses(
             // Sombra de relevo no sudeste.
             drawCircle(
                 brush = Brush.radialGradient(
-                    listOf(Color(0x41000000), Color(0x16000000), Color.Transparent),
+                    listOf(Color(0x4A000000), Color(0x1A000000), Color.Transparent),
                     center = Offset(center.x + 26f * s, center.y + 30f * s),
                     radius = 62f * s
                 ),
                 radius = 62f * s,
                 center = Offset(center.x + 26f * s, center.y + 30f * s)
             )
-
-            // Cor do exército propositalmente translúcida: terreno continua visível.
-            drawRect(ownerColor.copy(alpha = 0.43f))
 
             // Vinheta local muito sutil.
             drawCircle(
@@ -470,7 +482,7 @@ private fun DrawScope.drawLandmasses(
         )
         drawPath(
             path,
-            Color(0xFFB99A57).copy(alpha = 0.73f),
+            Color(0xFFCBA45C).copy(alpha = 0.82f),
             style = Stroke(width = (0.85f * s).coerceIn(0.65f, 1.35f))
         )
 
@@ -526,7 +538,7 @@ private fun DrawScope.drawTerrainRelief(
         val h = (8f + 22f * nh) * s
 
         drawOval(
-            color = terrain.contour.copy(alpha = 0.10f + 0.035f * (i % 3)),
+            color = terrain.contour.copy(alpha = 0.14f + 0.045f * (i % 3)),
             topLeft = Offset(cx - w * 0.5f, cy - h * 0.5f),
             size = Size(w, h),
             style = Stroke(width = stroke)
@@ -544,9 +556,9 @@ private fun DrawScope.drawTerrainRelief(
         val len = (5f + 11f * n3) * s
 
         val ridgeColor = if ((i + continentId) % 2 == 0) {
-            Color(0x25F7E6B3)
+            Color(0x30F7E6B3)
         } else {
-            Color(0x29000000)
+            Color(0x36000000)
         }
 
         drawLine(
@@ -568,48 +580,62 @@ private fun DrawScope.drawTerrainRelief(
         )
 
         drawCircle(
-            color = if (i % 2 == 0) Color(0x18FFF3C7) else Color(0x1B000000),
+            color = if (i % 2 == 0) Color(0x22FFF3C7) else Color(0x26000000),
             radius = (0.7f + nr * 1.4f) * s.coerceIn(0.65f, 1.7f),
             center = c
         )
     }
 }
 
+/**
+ * Converte a cor de identidade do jogador no pigmento usado no mapa.
+ *
+ * As cores dos jogadores são vivas de propósito no placar e nas cartas, onde
+ * precisam se distinguir num toque. No mapa, essa mesma saturação briga com a
+ * carta náutica: dessatura 28% e escurece para 78% e o vermelho vira tijolo, o
+ * azul vira aço, o verde vira musgo — sem mexer na identidade de ninguém.
+ */
+private fun pigment(c: Color): Color {
+    val lum = 0.299f * c.red + 0.587f * c.green + 0.114f * c.blue
+    fun mix(v: Float) = ((v * 0.72f) + (lum * 0.28f)) * 0.78f
+    return Color(mix(c.red), mix(c.green), mix(c.blue), c.alpha)
+}
+
 private fun terrainPalette(continentId: Int): TerrainPalette = when (continentId) {
     0 -> TerrainPalette(
-        light = Color(0xFF8A8C72),
-        mid = Color(0xFF596B55),
-        dark = Color(0xFF34483D),
+        light = Color(0xFF686A56),
+        mid = Color(0xFF435040),
+        dark = Color(0xFF27362E),
         contour = Color(0xFFB7B897)
     )
     1 -> TerrainPalette(
-        light = Color(0xFF82915E),
-        mid = Color(0xFF4E6E42),
-        dark = Color(0xFF294732),
+        light = Color(0xFF626D47),
+        mid = Color(0xFF3B5331),
+        dark = Color(0xFF1F3526),
         contour = Color(0xFFADBC82)
     )
     2 -> TerrainPalette(
-        light = Color(0xFF8B866C),
-        mid = Color(0xFF656A57),
-        dark = Color(0xFF3D493E),
+        light = Color(0xFF686551),
+        mid = Color(0xFF4C4F41),
+        dark = Color(0xFF2E372F),
         contour = Color(0xFFC0B994)
     )
     3 -> TerrainPalette(
-        light = Color(0xFFA38A58),
-        mid = Color(0xFF77653F),
-        dark = Color(0xFF4B442F),
+        light = Color(0xFF7A6842),
+        mid = Color(0xFF594C2F),
+        dark = Color(0xFF383323),
         contour = Color(0xFFD0B979)
     )
     4 -> TerrainPalette(
-        light = Color(0xFF9B8957),
-        mid = Color(0xFF6F6947),
-        dark = Color(0xFF3F4A37),
+        light = Color(0xFF746741),
+        mid = Color(0xFF534F35),
+        dark = Color(0xFF2F3729),
         contour = Color(0xFFC9B679)
     )
     else -> TerrainPalette(
-        light = Color(0xFF8C8259),
-        mid = Color(0xFF5F704B),
-        dark = Color(0xFF324939),
+        light = Color(0xFF696243),
+        mid = Color(0xFF475438),
+        dark = Color(0xFF25372B),
         contour = Color(0xFFC5B37F)
     )
 }
@@ -852,7 +878,7 @@ private fun DrawScope.drawVignette(size: Size) {
             colors = listOf(
                 Color.Transparent,
                 Color.Transparent,
-                Color(0x4D000000)
+                Color(0x5E000000)
             ),
             center = Offset(size.width * 0.5f, size.height * 0.48f),
             radius = edge * 0.68f
