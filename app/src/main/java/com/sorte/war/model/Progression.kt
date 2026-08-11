@@ -13,6 +13,24 @@ enum class SetupMode(val label: String, val description: String) {
 }
 
 /**
+ * Como os exércitos iniciais entram no tabuleiro.
+ *
+ * No tabuleiro de verdade, depois de repartir os territórios cada jogador
+ * posiciona as tropas restantes onde quiser. O modo automático mantém o
+ * sorteio que o jogo já fazia, para quem prefere começar direto.
+ */
+enum class ArmyPlacement(val label: String, val description: String) {
+    AUTOMATICA(
+        "Automático",
+        "As tropas iniciais são espalhadas por sorteio e a partida começa na hora."
+    ),
+    MANUAL(
+        "Manual",
+        "Cada território começa com 1 tropa e você posiciona o resto onde quiser, como no tabuleiro."
+    )
+}
+
+/**
  * Nível de dificuldade dos oponentes controlados pela CPU.
  *
  * A diferença entre os níveis está na **qualidade das decisões** da IA, não

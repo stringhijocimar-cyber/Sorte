@@ -13,6 +13,7 @@ import com.sorte.war.data.PlayerStats
 import com.sorte.war.data.ScreenOrientationMode
 import com.sorte.war.data.SaveInfo
 import com.sorte.war.data.StatsStorage
+import com.sorte.war.model.ArmyPlacement
 import com.sorte.war.model.Difficulty
 import com.sorte.war.model.GameMode
 import com.sorte.war.model.RoundReport
@@ -162,7 +163,8 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         difficulty: Difficulty = Difficulty.VETERANO,
         setupMode: SetupMode = SetupMode.DADOS,
         chooseObjective: Boolean = true,
-        mode: GameMode = GameMode.CLASSICO
+        mode: GameMode = GameMode.CLASSICO,
+        placement: ArmyPlacement = ArmyPlacement.AUTOMATICA
     ) {
         val palette = PlayerPalette.ordered
         val humanColor = palette[humanColorIndex.coerceIn(0, palette.size - 1)]
@@ -189,7 +191,8 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
             difficulty = difficulty,
             setupMode = setupMode,
             objectiveChoices = if (chooseObjective) 3 else 1,
-            mode = mode
+            mode = mode,
+            placement = placement
         )
         showStartRoll = setupMode == SetupMode.DADOS
         statsStore.rememberProfile(humanName.ifBlank { "Comandante" }, humanAvatarId)
@@ -203,7 +206,9 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         tacticalMessage = null
         endSoundPlayed = false
         humanTerritoriesBeforeAi = emptySet()
-        statusMessage = "Sua vez, Comandante — distribua seus reforços."
+        statusMessage = if (placement == ArmyPlacement.MANUAL)
+            "Posicione seus exércitos iniciais onde quiser."
+        else "Sua vez, Comandante — distribua seus reforços."
         screen = Screen.GAME
         sound.play(Sfx.CLICK)
         persist()
@@ -311,9 +316,13 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
             e.reinforce(id, 1)
             selectedTerritory = id
             sound.play(Sfx.CLICK, 0.6f)
-            statusMessage = if (e.reinforcements > 0)
-                "Reforços restantes: ${e.reinforcements}"
-            else "Reforços concluídos — avance para o ataque."
+            statusMessage = when {
+                e.placingInitialArmies && e.reinforcements > 0 ->
+                    "Tropas a posicionar: ${e.reinforcements}"
+                e.placingInitialArmies -> "Posicionamento concluído — confirme."
+                e.reinforcements > 0 -> "Reforços restantes: ${e.reinforcements}"
+                else -> "Reforços concluídos — avance para o ataque."
+            }
             bump()
         }
     }
@@ -430,18 +439,22 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
             bump(); return
         }
         val wasDeslocamento = e.phase == Phase.DESLOCAMENTO
+        val wasPlacing = e.placingInitialArmies
         e.advancePhase()
         selectedTerritory = null
         fortifyTarget = null
         sound.play(Sfx.CLICK)
-        statusMessage = when (e.phase) {
-            Phase.ATAQUE -> "Fase de ataque — selecione um território seu."
-            Phase.DESLOCAMENTO -> "Fase de deslocamento — mova tropas (opcional)."
+        statusMessage = when {
+            e.placingInitialArmies && e.currentPlayer.isHuman ->
+                "Posicione seus exércitos iniciais onde quiser."
+            e.placingInitialArmies -> "Os outros exércitos estão se posicionando..."
+            e.phase == Phase.ATAQUE -> "Fase de ataque — selecione um território seu."
+            e.phase == Phase.DESLOCAMENTO -> "Fase de deslocamento — mova tropas (opcional)."
             else -> statusMessage
         }
         persist()
         bump()
-        if (wasDeslocamento) startAiRound()
+        if (wasDeslocamento || wasPlacing) startAiRound()
     }
 
     // ---------------------------------------------------------------------

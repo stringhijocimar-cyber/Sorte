@@ -24,6 +24,14 @@ object Ai {
 
     fun playTurn(engine: GameEngine) {
         if (engine.phase == Phase.FIM_DE_JOGO) return
+
+        // Etapa de posicionamento inicial: só distribui as tropas e passa a vez.
+        if (engine.placingInitialArmies) {
+            placeInitialArmies(engine)
+            engine.advancePhase()
+            return
+        }
+
         doReinforce(engine)
         engine.advancePhase() // -> ATAQUE
         playAttackCards(engine)
@@ -32,6 +40,19 @@ object Ai {
         engine.advancePhase() // -> DESLOCAMENTO
         doFortify(engine)
         engine.advancePhase() // -> fim do turno
+    }
+
+    /**
+     * Posicionamento inicial da CPU: concentra nas fronteiras, com a mesma
+     * imperfeição da dificuldade — o Recruta espalha mais, o Marechal
+     * concentra onde importa.
+     */
+    private fun placeInitialArmies(engine: GameEngine) {
+        val front = borders(engine).ifEmpty { engine.territoriesOf(me(engine)) }
+        if (front.isEmpty()) return
+        while (engine.reinforcements > 0) {
+            if (!engine.reinforce(pickReinforceTarget(engine, front), 1)) break
+        }
     }
 
     private fun me(engine: GameEngine) = engine.currentPlayerIndex

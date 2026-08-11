@@ -43,6 +43,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.sorte.war.model.Avatar
+import com.sorte.war.model.ArmyPlacement
 import com.sorte.war.model.Difficulty
 import com.sorte.war.model.GameMode
 import com.sorte.war.model.PlayerPalette
@@ -69,6 +70,7 @@ fun NewGameScreen(vm: GameViewModel) {
     var difficulty by remember { mutableStateOf(Difficulty.VETERANO) }
     var setupMode by remember { mutableStateOf(SetupMode.DADOS) }
     var gameMode by remember { mutableStateOf(GameMode.CLASSICO) }
+    var placement by remember { mutableStateOf(ArmyPlacement.AUTOMATICA) }
     var pickObjective by remember { mutableStateOf(true) }
 
     BackHandler { vm.goTo(Screen.HOME) }
@@ -427,7 +429,51 @@ fun NewGameScreen(vm: GameViewModel) {
 
         Spacer(Modifier.height(10.dp))
 
-        SetupSection(8, "OBJETIVO SECRETO") {
+        SetupSection(8, "POSICIONAMENTO DAS TROPAS") {
+            ArmyPlacement.entries.forEach { mode ->
+                val selected = placement == mode
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 3.dp)
+                        .clip(RoundedCornerShape(11.dp))
+                        .background(
+                            if (selected) TacticalTeal.copy(alpha = 0.09f)
+                            else Color.Black.copy(alpha = 0.13f)
+                        )
+                        .border(
+                            if (selected) 1.6.dp else 1.dp,
+                            if (selected) TacticalTeal else TacticalStroke,
+                            RoundedCornerShape(11.dp)
+                        )
+                        .clickableNoRipple { placement = mode }
+                        .padding(horizontal = 11.dp, vertical = 9.dp)
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            mode.label.uppercase(),
+                            color = if (selected) TacticalTeal else TextPrimary,
+                            fontWeight = FontWeight.Black,
+                            fontSize = 10.sp
+                        )
+                        Text(mode.description, color = TextSecondary, fontSize = 9.sp)
+                    }
+                    if (selected) {
+                        Icon(
+                            Icons.Filled.Check,
+                            contentDescription = null,
+                            tint = TacticalTeal,
+                            modifier = Modifier.size(15.dp)
+                        )
+                    }
+                }
+            }
+        }
+
+        Spacer(Modifier.height(10.dp))
+
+        SetupSection(9, "OBJETIVO SECRETO") {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
@@ -498,7 +544,7 @@ fun NewGameScreen(vm: GameViewModel) {
                 .clickableNoRipple {
                     vm.startGame(
                         name, players, colorIndex, avatarIndex,
-                        difficulty, setupMode, pickObjective, gameMode
+                        difficulty, setupMode, pickObjective, gameMode, placement
                     )
                 }
                 .padding(horizontal = 16.dp)

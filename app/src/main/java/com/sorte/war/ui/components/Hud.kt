@@ -149,13 +149,20 @@ fun TopBar(
                     letterSpacing = 1.sp
                 )
                 Text(
-                    phaseName(engine.phase),
+                    if (engine.placingInitialArmies) "POSICIONAMENTO"
+                    else phaseName(engine.phase),
                     color = accent,
                     fontSize = if (compact) 12.sp else 17.sp,
                     fontWeight = FontWeight.Black,
                     letterSpacing = 1.2.sp
                 )
-                if (engine.phase == Phase.REFORCO) {
+                if (engine.placingInitialArmies) {
+                    Text(
+                        "${engine.reinforcements} tropas para posicionar",
+                        color = TextSecondary,
+                        fontSize = 7.sp
+                    )
+                } else if (engine.phase == Phase.REFORCO) {
                     Text(
                         "${engine.reinforcements} reforços disponíveis",
                         color = TextSecondary,
@@ -384,11 +391,14 @@ fun BottomBar(
     @Suppress("UNUSED_EXPRESSION") refresh
     val human = engine.currentPlayer.isHuman
     val accent = phaseAccent(engine.phase)
-    val actionLabel = when (engine.phase) {
+    val actionLabel = when {
+        engine.placingInitialArmies -> "CONFIRMAR POSICIONAMENTO"
+        else -> when (engine.phase) {
         Phase.REFORCO -> "IR PARA ATAQUE"
         Phase.ATAQUE -> "ENCERRAR ATAQUE"
         Phase.DESLOCAMENTO -> "ENCERRAR TURNO"
         Phase.FIM_DE_JOGO -> ""
+        }
     }
     val enabled = human && engine.phase != Phase.FIM_DE_JOGO &&
         !(engine.phase == Phase.REFORCO && !engine.canAdvanceFromReinforce())

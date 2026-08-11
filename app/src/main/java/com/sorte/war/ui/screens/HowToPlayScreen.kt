@@ -79,25 +79,34 @@ fun HowToPlayScreen(vm: GameViewModel) {
                 "o objetivo primeiro — ou quem sobrar sozinho."
         )
         Step(
-            "2", "Reforço",
+            "2", "Posicionamento inicial",
+            "Na Nova Campanha você escolhe como as tropas iniciais entram no " +
+                "tabuleiro. No automático elas são espalhadas por sorteio e a partida " +
+                "começa na hora. No manual, cada território começa com 1 tropa e você " +
+                "posiciona o resto onde quiser, um território por toque, como no " +
+                "tabuleiro de verdade — só depois que todos os exércitos posicionarem " +
+                "é que a primeira rodada começa."
+        )
+        Step(
+            "3", "Reforço",
             "No início do turno você recebe exércitos: o número de territórios seus " +
                 "dividido por 2 (mínimo 3), mais o bônus dos continentes que dominar " +
                 "por inteiro. Toque nos seus territórios para posicionar as tropas."
         )
         Step(
-            "3", "Ataque",
+            "4", "Ataque",
             "Toque num território seu com 2 ou mais exércitos e depois num vizinho " +
                 "inimigo destacado. Os dados decidem: até 3 de ataque contra até 3 de " +
                 "defesa, comparados do maior para o menor. Empate favorece o defensor. " +
                 "Ao conquistar, você escolhe quantas tropas avançam."
         )
         Step(
-            "4", "Deslocamento",
+            "5", "Deslocamento",
             "Uma vez por turno você pode mover tropas entre dois territórios seus " +
                 "ligados por um caminho de territórios também seus."
         )
         Step(
-            "5", "Cartas",
+            "6", "Cartas",
             "Conquistando ao menos um território no turno, você ganha uma carta. " +
                 "Na fase de reforço, troque 3 cartas (três iguais, uma de cada símbolo, " +
                 "ou com coringa) por exércitos extras — o valor aumenta a cada troca. " +

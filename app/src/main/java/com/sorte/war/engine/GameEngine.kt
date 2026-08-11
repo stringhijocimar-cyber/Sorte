@@ -1,6 +1,7 @@
 package com.sorte.war.engine
 
 import com.sorte.war.model.ArmyColor
+import com.sorte.war.model.ArmyPlacement
 import com.sorte.war.model.ArmyRoundStats
 import com.sorte.war.model.ArmySnapshot
 import com.sorte.war.model.BattleLogEntry
@@ -38,7 +39,9 @@ class GameEngine(
     private val rng: Random = Random(System.nanoTime()),
     skipSetup: Boolean = false,
     /** Clássico mantém as regras do tabuleiro; tático liga a expansão. */
-    val mode: GameMode = GameMode.CLASSICO
+    val mode: GameMode = GameMode.CLASSICO,
+    /** Sorteio das tropas iniciais ou posicionamento à mão, como no tabuleiro. */
+    val placement: ArmyPlacement = ArmyPlacement.AUTOMATICA
 ) {
     data class PlayerConfig(
         val name: String,
@@ -184,6 +187,25 @@ class GameEngine(
     fun missionCompleted(playerId: Int): Boolean =
         playerId in players.indices && missionDone[playerId]
 
+    // ---------------------------------------------------------------------
+    // DISTRIBUIÇÃO INICIAL À MÃO (opcional)
+    // ---------------------------------------------------------------------
+
+    /** Tropas que cada exército ainda tem para posicionar antes da 1ª rodada. */
+    private val initialReserve = IntArray(players.size)
+
+    /**
+     * Ainda estamos na etapa de posicionamento inicial? Enquanto for verdade,
+     * a fase de reforço serve para distribuir as tropas iniciais e ninguém
+     * ataca. Sempre falso quando o posicionamento é automático.
+     */
+    var placingInitialArmies = false
+        private set
+
+    /** Tropas que este exército ainda tem para posicionar. */
+    fun initialReserveOf(playerId: Int): Int =
+        if (playerId in players.indices) initialReserve[playerId] else 0
+
     val currentPlayer: Player get() = players[currentPlayerIndex]
 
     init {
@@ -237,12 +259,20 @@ class GameEngine(
         for (p in players.indices) {
             val owned = (0 until n).filter { ownerOf[it] == p }
             var remaining = startArmies - owned.size
+            if (placement == ArmyPlacement.MANUAL) {
+                // Como no tabuleiro: cada território fica com 1 tropa e o
+                // restante é posicionado pelo dono, território a território.
+                initialReserve[p] = remaining.coerceAtLeast(0)
+                continue
+            }
             while (remaining > 0) {
                 val t = owned[rng.nextInt(owned.size)]
                 armiesOf[t]++
                 remaining--
             }
         }
+        placingInitialArmies = placement == ArmyPlacement.MANUAL &&
+            initialReserve.any { it > 0 }
     }
 
     private fun assignObjectives() {
@@ -407,6 +437,14 @@ class GameEngine(
         fortifyUsed = false
         pendingAdvance = null
         phase = Phase.REFORCO
+        if (placingInitialArmies) {
+            // Etapa de posicionamento: sem bônus, sem momentum, sem ataque.
+            conquestsThisTurn = 0
+            momentumApplied = 0
+            missionArmiesApplied = 0
+            reinforcements = initialReserve[currentPlayerIndex]
+            return
+        }
         conquestsThisTurn = 0
         extraFortifies = 0
         attackDiceBonus = 0
@@ -441,6 +479,10 @@ class GameEngine(
         if (c <= 0) return false
         armiesOf[tId] += c
         reinforcements -= c
+        if (placingInitialArmies) {
+            initialReserve[currentPlayerIndex] = (initialReserve[currentPlayerIndex] - c)
+                .coerceAtLeast(0)
+        }
         return true
     }
 
@@ -448,12 +490,43 @@ class GameEngine(
 
     /** Avança para a próxima fase respeitando as regras. */
     fun advancePhase() {
+        if (placingInitialArmies) {
+            if (reinforcements > 0) return
+            advanceInitialPlacement()
+            return
+        }
         when (phase) {
             Phase.REFORCO -> if (reinforcements == 0) phase = Phase.ATAQUE
             Phase.ATAQUE -> { pendingAdvance = null; phase = Phase.DESLOCAMENTO }
             Phase.DESLOCAMENTO -> endTurn()
             Phase.FIM_DE_JOGO -> {}
         }
+    }
+
+    /**
+     * Fecha o posicionamento deste exército e passa a vez. Quando todos
+     * terminam, a partida começa de fato pelo vencedor do sorteio.
+     */
+    private fun advanceInitialPlacement() {
+        initialReserve[currentPlayerIndex] = 0
+        var next = currentPlayerIndex
+        var guard = 0
+        do {
+            next = (next + 1) % players.size
+            guard++
+        } while (initialReserve[next] <= 0 && guard <= players.size)
+
+        if (initialReserve[next] > 0) {
+            currentPlayerIndex = next
+            startTurn()
+            return
+        }
+
+        // Todos posicionaram: começa a campanha.
+        placingInitialArmies = false
+        currentPlayerIndex = startingPlayer
+        takeSnapshot()
+        startTurn()
     }
 
     private fun endTurn() {
@@ -508,6 +581,7 @@ class GameEngine(
      * (ou o mínimo de dados usados) para o território conquistado.
      */
     fun attack(from: Int, to: Int, moveArmies: Int? = null): com.sorte.war.model.BattleResult? {
+        if (placingInitialArmies) return null
         if (phase != Phase.ATAQUE) return null
         if (ownerOf[from] != currentPlayerIndex) return null
         if (ownerOf[to] == currentPlayerIndex) return null
@@ -1037,6 +1111,9 @@ class GameEngine(
         line("turn", turnNumber.toString())
         line("round", roundNumber.toString())
         line("conqT", conquestsThisTurn.toString())
+        line("place", placement.name)
+        line("placing", if (placingInitialArmies) "1" else "0")
+        line("reserve", initialReserve.joinToString(","))
 
         // --- v4: só da expansão tática ---
         if (tactical) {
@@ -1208,7 +1285,12 @@ class GameEngine(
                 val savedMode = runCatching {
                     GameMode.valueOf(one("mode") ?: GameMode.CLASSICO.name)
                 }.getOrDefault(GameMode.CLASSICO)
-                val e = GameEngine(configs, diff, skipSetup = true, mode = savedMode)
+                val savedPlacement = runCatching {
+                    ArmyPlacement.valueOf(one("place") ?: ArmyPlacement.AUTOMATICA.name)
+                }.getOrDefault(ArmyPlacement.AUTOMATICA)
+                val e = GameEngine(
+                    configs, diff, skipSetup = true, mode = savedMode, placement = savedPlacement
+                )
 
                 parsed.forEachIndexed { idx, f ->
                     val p = e.players[idx]
@@ -1255,6 +1337,10 @@ class GameEngine(
                 e.turnNumber = one("turn")?.toIntOrNull() ?: 0
                 e.roundNumber = one("round")?.toIntOrNull() ?: 1
                 e.conquestsThisTurn = one("conqT")?.toIntOrNull() ?: 0
+                e.placingInitialArmies = one("placing") == "1"
+                ints("reserve").forEachIndexed { i, v ->
+                    if (i < e.initialReserve.size) e.initialReserve[i] = v
+                }
 
                 if (e.tactical) {
                 e.momentumApplied = one("momA")?.toIntOrNull() ?: 0
