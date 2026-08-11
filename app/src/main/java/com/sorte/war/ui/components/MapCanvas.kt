@@ -15,7 +15,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
@@ -116,14 +115,11 @@ fun MapCanvas(
         drawWatermark(size)
         drawOceanGrid(proj)
         drawRoutes(proj)
-        drawLandmasses(engine, selectedTerritory, validTargets, s, proj)
-        // Textura de relevo por cima de tudo, num único blit: dá granulação
-        // ao terreno e ao mar sem custar 42 desenhos por quadro.
-        drawTerrainTexture(terrain, size)
+        drawLandmasses(engine, selectedTerritory, validTargets, s, proj, terrain)
         drawOceanNames(s, proj)
         drawFortifications(engine, s, proj, outpost, bunker, fortress)
-        drawLabels(engine, s, proj)
-        drawContinentBadges(s, proj)
+        drawLabels(engine, s, userScale, proj)
+        drawContinentBadges(s, userScale, proj)
     }
 }
 
@@ -231,27 +227,24 @@ private fun DrawScope.drawOceanNames(s: Float, project: (Float, Float) -> Offset
 }
 
 /**
- * Granulação de relevo aplicada sobre o mapa inteiro em uma passada só.
- * BlendMode.Overlay escurece o que é escuro e clareia o que é claro, então a
- * textura acompanha o terreno em vez de cobri-lo.
+ * Relevo do mundo inteiro, assado numa imagem alinhada às coordenadas do mapa
+ * (mar transparente). Um único desenho por quadro cobre os 42 territórios, e
+ * como a imagem usa o mesmo sistema de coordenadas dos polígonos, ela
+ * acompanha zoom e pan sem cálculo nenhum.
  */
-private fun DrawScope.drawTerrainTexture(texture: ImageBitmap, size: Size) {
-    val tile = 260f
-    val cols = kotlin.math.ceil(size.width / tile).toInt() + 1
-    val rows = kotlin.math.ceil(size.height / tile).toInt() + 1
-    for (r in 0 until rows) {
-        for (c in 0 until cols) {
-            drawImage(
-                image = texture,
-                srcOffset = IntOffset.Zero,
-                srcSize = IntSize(texture.width, texture.height),
-                dstOffset = IntOffset((c * tile).toInt(), (r * tile).toInt()),
-                dstSize = IntSize(tile.toInt(), tile.toInt()),
-                alpha = 0.30f,
-                blendMode = BlendMode.Overlay
-            )
-        }
-    }
+private fun DrawScope.drawWorldTerrain(terrain: ImageBitmap, project: (Float, Float) -> Offset) {
+    val topLeft = project(0f, 0f)
+    val bottomRight = project(VW, VH)
+    val w = (bottomRight.x - topLeft.x).toInt()
+    val h = (bottomRight.y - topLeft.y).toInt()
+    if (w <= 0 || h <= 0) return
+    drawImage(
+        image = terrain,
+        srcOffset = IntOffset.Zero,
+        srcSize = IntSize(terrain.width, terrain.height),
+        dstOffset = IntOffset(topLeft.x.toInt(), topLeft.y.toInt()),
+        dstSize = IntSize(w, h)
+    )
 }
 
 private fun DrawScope.drawOceanGrid(project: (Float, Float) -> Offset) {
@@ -287,7 +280,8 @@ private fun DrawScope.drawLandmasses(
     selected: Int?,
     validTargets: Set<Int>,
     s: Float,
-    project: (Float, Float) -> Offset
+    project: (Float, Float) -> Offset,
+    terrain: ImageBitmap
 ) {
     // 1ª passada: sombra do relevo sob todas as terras
     for (t in MapData.territories) {
@@ -297,40 +291,20 @@ private fun DrawScope.drawLandmasses(
         drawPath(shadow, Color(0x70000000))
     }
 
-    // 2ª passada: terreno + cor do dono (translúcida) + relevo
+    // 2ª passada: o relevo do mundo, numa imagem só
+    drawWorldTerrain(terrain, project)
+
+    // 3ª passada: véu da cor do dono por cima do relevo + fronteiras
     for (t in MapData.territories) {
         val owner = engine.ownerOf[t.id]
         val ownerColor = if (owner >= 0) Color(engine.players[owner].colorArgb) else Color(0xFF7A7A7A)
         val path = territoryPath(t.id, project)
-        val center = project(t.x, t.y)
 
         clipPath(path) {
-            // terreno base (visível por baixo da cor do exército)
-            drawRect(landColor(t.continentId))
-            // relevo: luz vinda do noroeste
-            drawCircle(
-                Brush.radialGradient(
-                    listOf(Color(0x4CFFFFFF), Color(0x00FFFFFF)),
-                    center = Offset(center.x - 14f * s, center.y - 16f * s),
-                    radius = 46f * s
-                ),
-                radius = 46f * s,
-                center = Offset(center.x - 14f * s, center.y - 16f * s)
-            )
-            // sombra do relevo a sudeste
-            drawCircle(
-                Brush.radialGradient(
-                    listOf(Color(0x48000000), Color(0x00000000)),
-                    center = Offset(center.x + 16f * s, center.y + 18f * s),
-                    radius = 44f * s
-                ),
-                radius = 44f * s,
-                center = Offset(center.x + 16f * s, center.y + 18f * s)
-            )
             // Cor do exército puxada para um tom terroso antes de entrar como
-            // véu: a cor pura, mesmo translúcida, chapava o relevo.
-            val muted = lerp(ownerColor, Color(0xFF6E6A52), 0.34f)
-            drawRect(muted.copy(alpha = 0.52f))
+            // véu. A cor pura, mesmo translúcida, apagava o terreno.
+            val muted = lerp(ownerColor, Color(0xFF6E6A52), 0.30f)
+            drawRect(muted.copy(alpha = 0.42f))
 
             // fronteiras internas dos países que compõem o território
             val subs = MapData.subShapesOf(t.id)
@@ -368,19 +342,13 @@ private fun DrawScope.drawLandmasses(
     }
 }
 
-/** Cor de terreno por continente (bioma), visível sob a cor translúcida do dono. */
-private fun landColor(continentId: Int): Color = when (continentId) {
-    0 -> Color(0xFF7C8557)
-    1 -> Color(0xFF5F7E45)
-    2 -> Color(0xFF77805F)
-    3 -> Color(0xFF9C8A55)
-    4 -> Color(0xFF847E52)
-    else -> Color(0xFF8A7248)
-}
-
 private fun DrawScope.drawLabels(
-    engine: GameEngine, s: Float, project: (Float, Float) -> Offset
+    engine: GameEngine, s: Float, userScale: Float, project: (Float, Float) -> Offset
 ) {
+    // O nome de todos os 42 territórios ao mesmo tempo polui o mapa. Ele só
+    // aparece quando o jogador aproxima; de longe fica só o emblema de tropas,
+    // que é o que importa para ler a partida.
+    val showNames = userScale > 1.25f
     val namePaint = Paint().apply {
         color = android.graphics.Color.argb(245, 248, 251, 255)
         textAlign = Paint.Align.CENTER
@@ -403,7 +371,9 @@ private fun DrawScope.drawLabels(
         val ownerColor = if (owner >= 0) Color(engine.players[owner].colorArgb) else Color.Gray
         val armies = engine.armiesOf[t.id]
 
-        drawContext.canvas.nativeCanvas.drawText(t.name, c.x, c.y - 15f * s, namePaint)
+        if (showNames) {
+            drawContext.canvas.nativeCanvas.drawText(t.name, c.x, c.y - 15f * s, namePaint)
+        }
 
         // Emblema de tropas: metal escuro, aro dourado e um filete na cor do
         // exército, para o número continuar legível no zoom mínimo.
@@ -480,15 +450,20 @@ private fun DrawScope.drawFortifications(
     }
 }
 
-private fun DrawScope.drawContinentBadges(s: Float, project: (Float, Float) -> Offset) {
+private fun DrawScope.drawContinentBadges(
+    s: Float, userScale: Float, project: (Float, Float) -> Offset
+) {
+    // Discretos: identificam a região sem competir com o terreno.
     val paint = Paint().apply {
-        color = android.graphics.Color.argb(210, 255, 205, 110)
+        color = android.graphics.Color.argb(120, 236, 206, 150)
         textAlign = Paint.Align.CENTER
-        textSize = 11f * s
+        textSize = 8.5f * s
+        letterSpacing = 0.22f
         typeface = Typeface.create(Typeface.DEFAULT_BOLD, Typeface.BOLD)
         isAntiAlias = true
-        setShadowLayer(4f, 0f, 1f, android.graphics.Color.argb(220, 0, 0, 0))
+        setShadowLayer(4f, 0f, 1f, android.graphics.Color.argb(200, 0, 0, 0))
     }
+    if (userScale > 2.4f) return   // de perto o rótulo do continente atrapalha
     for (cont in MapData.continents) {
         val pts = cont.territoryIds.map { MapData.territory(it) }
         val cx = pts.map { it.x }.average().toFloat()
