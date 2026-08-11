@@ -79,7 +79,8 @@ object Ai {
         var guard = 0
         while (guard++ < 10) {
             val set = findValidSet(engine) ?: break
-            if (engine.mustTradeCards() || engine.currentPlayer.cards.size >= 3) {
+            val hand = engine.currentPlayer.cards.size
+            if (engine.mustTradeCards() || hand >= engine.difficulty.tradeAtHandSize) {
                 engine.tradeCards(set)
             } else break
         }
@@ -87,16 +88,22 @@ object Ai {
         playReinforceCards(engine)
 
         val front = borders(engine)
-        var guard2 = 0
-        while (engine.reinforcements > 0 && guard2++ < 500) {
+        // Distribui TODOS os reforços. O laço termina porque cada colocação
+        // bem-sucedida gasta um exército, e uma colocação que falha sai fora.
+        //
+        // Antes havia um teto fixo de 500 voltas: numa partida longa, várias
+        // trocas de cartas seguidas rendem mais de 500 exércitos num turno só,
+        // sobrava reforço, o motor se recusava a sair da fase de reforço e o
+        // turno da CPU travava para sempre.
+        while (engine.reinforcements > 0) {
             if (front.isEmpty()) {
                 // Sem fronteiras (raro): reforça o território mais forte.
                 val any = engine.territoriesOf(me(engine)).maxByOrNull { engine.armiesOf[it] }
-                if (any != null) engine.reinforce(any, engine.reinforcements) else break
+                if (any != null) engine.reinforce(any, engine.reinforcements)
                 break
             }
             val target = pickReinforceTarget(engine, front)
-            engine.reinforce(target, 1)
+            if (!engine.reinforce(target, 1)) break
         }
     }
 
@@ -106,6 +113,11 @@ object Ai {
      * mais do que espalhar.
      */
     private fun pickReinforceTarget(engine: GameEngine, front: List<Int>): Int {
+        // Parte dos reforços vai para a melhor posição; o resto é espalhado.
+        // É esse desperdício controlado que separa o Recruta do Marechal.
+        if (rng.nextFloat() > engine.difficulty.reinforcementEfficiency) {
+            return front[rng.nextInt(front.size)]
+        }
         return front.maxByOrNull { t ->
             val pressure = maxEnemyNeighborArmies(engine, t) - engine.armiesOf[t]
             val upgrade = if (engine.tactical && nextLevelAt(engine.armiesOf[t]) == 1) 3 else 0
@@ -248,13 +260,26 @@ object Ai {
 
     // ---------------- Ataque ----------------
 
-    /** Melhor par (origem, alvo) segundo a força efetiva do defensor. */
-    private fun bestAttack(engine: GameEngine): Pair<Int, Int>? {
+    /**
+     * Quanto a cautela já afrouxou. Zero nas primeiras 10 rodadas — o começo
+     * precisa continuar manso para quem está aprendendo — e cresce depois,
+     * até deixar qualquer nível decisivo o bastante para encerrar a partida.
+     */
+    private fun relaxation(engine: GameEngine): Int =
+        ((engine.roundNumber - 10) / 8).coerceIn(0, 4)
+
+    /** Ataques viáveis, do mais vantajoso para o menos. */
+    private fun rankedAttacks(engine: GameEngine): List<Pair<Int, Int>> {
         val p = me(engine)
-        val minForce = engine.difficulty.minArmiesToAttack
-        val minAdvantage = engine.difficulty.attackThreshold
-        var best: Pair<Int, Int>? = null
-        var bestAdvantage = Int.MIN_VALUE
+        // A cautela afrouxa devagar com o passar das rodadas. Sem isso, uma
+        // mesa de Recrutas fica tão passiva que a partida não termina: a
+        // medição mostrou mediana de 416 turnos e 1 em 40 partidas sem fim.
+        // O começo continua manso, que é o que importa para quem está
+        // aprendendo; o fim de jogo deixa de arrastar.
+        val relax = relaxation(engine)
+        val minForce = (engine.difficulty.minArmiesToAttack - relax).coerceAtLeast(2)
+        val minAdvantage = (engine.difficulty.attackThreshold - relax).coerceAtLeast(0)
+        val options = mutableListOf<Triple<Int, Int, Int>>()
         for (from in engine.territoriesOf(p)) {
             if (engine.armiesOf[from] < 2) continue
             for (to in engine.attackTargets(from)) {
@@ -265,22 +290,30 @@ object Ai {
                 // ataque mesmo contra uma fortaleza. Sem isso, dois exércitos
                 // cautelosos crescem em paralelo e a partida nunca termina.
                 val worthIt = advantage >= minAdvantage || rawAdvantage >= minAdvantage + 3
-                if (engine.armiesOf[from] >= minForce &&
-                    worthIt &&
-                    advantage > bestAdvantage
-                ) {
-                    bestAdvantage = advantage
-                    best = from to to
+                if (engine.armiesOf[from] >= minForce && worthIt) {
+                    options.add(Triple(from, to, advantage))
                 }
             }
         }
-        return best
+        return options.sortedByDescending { it.third }.map { it.first to it.second }
+    }
+
+    /**
+     * Próximo ataque. Níveis mais baixos sorteiam entre os melhores em vez de
+     * jogar sempre a melhor jogada matemática.
+     */
+    private fun bestAttack(engine: GameEngine): Pair<Int, Int>? {
+        val ranked = rankedAttacks(engine)
+        if (ranked.isEmpty()) return null
+        val pool = minOf(engine.difficulty.candidateAttacks, ranked.size)
+        return ranked[rng.nextInt(pool)]
     }
 
     private fun doAttacks(engine: GameEngine) {
         val p = me(engine)
-        var guard = 0
-        while (guard++ < 200 && engine.phase == Phase.ATAQUE) {
+        val maxRounds = engine.difficulty.maxAttackRounds + relaxation(engine) * 2
+        var rounds = 0
+        while (rounds++ < maxRounds && engine.phase == Phase.ATAQUE) {
             val move = bestAttack(engine) ?: break
             val (from, to) = move
             val other = MapData.territory(from).neighbors.any {
@@ -288,8 +321,15 @@ object Ai {
             }
             // Se o destino conquistado ficará numa fronteira, empurra a maioria.
             val moveArmies = if (other) (engine.armiesOf[from] / 2) else (engine.armiesOf[from] - 1)
+            val before = engine.conquestsThisTurn
             engine.attack(from, to, moveArmies)
             if (engine.winnerId != null) return
+
+            // Conquistou: decide se continua a campanha ou encerra por aqui.
+            if (engine.conquestsThisTurn > before) {
+                val keepGoing = engine.difficulty.continueChance(engine.conquestsThisTurn)
+                if (rng.nextFloat() > keepGoing) return
+            }
         }
     }
 
@@ -327,7 +367,9 @@ object Ai {
             }
             val to = reachableBorders.maxByOrNull { maxEnemyNeighborArmies(engine, it) }
             if (to != null) {
-                return engine.fortify(from, to, engine.armiesOf[from] - 1)
+                val available = engine.armiesOf[from] - 1
+                val moved = maxOf(1, (available * engine.difficulty.fortifyEfficiency).toInt())
+                return engine.fortify(from, to, moved)
             }
         }
         return false
