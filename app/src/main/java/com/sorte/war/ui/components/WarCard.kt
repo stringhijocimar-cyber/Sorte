@@ -4,6 +4,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -41,6 +42,7 @@ private val CardEdge = Color(0xFF2C3646)
 private val SilhouetteCyan = Color(0xFF2FD3F5)
 private val SymbolRed = Color(0xFFE23B3B)
 private val JokerGold = Color(0xFFFFC24B)
+private val SelectionTeal = Color(0xFF4FE0D8)
 
 /**
  * Carta do War desenhada como a do tabuleiro: fundo escuro, nome do território
@@ -65,15 +67,19 @@ fun WarCard(
     } else null
 
     if (painted != null) {
+        // A arte já traz nome, continente e símbolo. Nada é desenhado por
+        // cima: só a moldura de seleção. Proporção 2:3 e ContentScale.Fit
+        // para a carta nunca esticar nem perder a moldura.
         Box(
+            contentAlignment = Alignment.Center,
             modifier = modifier
                 .width(width.dp)
-                .height(height.dp)
+                .aspectRatio(2f / 3f)
                 .clip(RoundedCornerShape(10.dp))
                 .background(CardBlack)
                 .border(
                     width = if (selected) 2.5.dp else 1.dp,
-                    color = if (selected) JokerGold else CardEdge,
+                    color = if (selected) SelectionTeal else CardEdge,
                     shape = RoundedCornerShape(10.dp)
                 )
         ) {
@@ -81,9 +87,16 @@ fun WarCard(
                 painter = painterResource(id = painted),
                 contentDescription = if (isJoker) "Coringa"
                 else MapData.territory(card.territoryId).name,
-                contentScale = ContentScale.Crop,
+                contentScale = ContentScale.Fit,
                 modifier = Modifier.fillMaxSize()
             )
+            if (selected) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(SelectionTeal.copy(alpha = 0.14f))
+                )
+            }
         }
         return
     }

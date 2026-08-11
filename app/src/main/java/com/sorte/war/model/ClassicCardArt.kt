@@ -40,11 +40,26 @@ object ClassicCardArt {
         26 to R.drawable.terr_26_aral,
         27 to R.drawable.terr_27_orientemedio,
         30 to R.drawable.terr_30_omsk,
+        3 to R.drawable.terr_03_vancouver,
+        16 to R.drawable.terr_16_moscou,
+        28 to R.drawable.terr_28_oma,
+        29 to R.drawable.terr_29_siberia,
+        31 to R.drawable.terr_31_tchita,
+        32 to R.drawable.terr_32_vladivostok,
+        33 to R.drawable.terr_33_mongolia,
+        34 to R.drawable.terr_34_japao,
+        35 to R.drawable.terr_35_china,
+        36 to R.drawable.terr_36_india,
+        37 to R.drawable.terr_37_vietna,
+        38 to R.drawable.terr_38_sumatra,
+        39 to R.drawable.terr_39_borneu,
         40 to R.drawable.terr_40_novaguine,
         41 to R.drawable.terr_41_australia
     )
 
+    /** Os dois coringas do baralho. */
     val jokerArt: Int = R.drawable.terr_coringa
+    val jokerArtAlt: Int = R.drawable.terr_coringa_02
 
     /** Arte do território, ou null se a carta ainda não foi entregue. */
     fun of(territoryId: Int): Int? = art[territoryId]

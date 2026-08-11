@@ -47,36 +47,38 @@ object ClassicSymbols {
     )
 
     /**
-     * Preenchimento dos territórios sem símbolo impresso, calibrado para
-     * fechar o baralho em 14 círculos, 14 quadrados e 14 triângulos.
+     * Os 16 territórios do último lote. Os símbolos vieram impressos exatamente
+     * como especificado, então entram junto com os demais.
      */
-    private val filler: Map<Int, CardSymbol> = mapOf(
-        0 to CardSymbol.CIRCULO,     // Alasca (arte veio sem símbolo)
-        3 to CardSymbol.CIRCULO,     // Vancouver (sem carta)
-        5 to CardSymbol.CIRCULO,     // Labrador (arte veio sem símbolo)
-        12 to CardSymbol.CIRCULO,    // Argentina (arte veio sem símbolo)
-        16 to CardSymbol.CIRCULO,    // Moscou (sem carta)
-        28 to CardSymbol.CIRCULO,    // Omã (sem carta)
-        29 to CardSymbol.CIRCULO,    // Sibéria (sem carta)
-        31 to CardSymbol.CIRCULO,    // Tchita (sem carta)
+    private val printedLate: Map<Int, CardSymbol> = mapOf(
+        0 to CardSymbol.CIRCULO,     // Alasca
+        3 to CardSymbol.CIRCULO,     // Vancouver
+        5 to CardSymbol.CIRCULO,     // Labrador
+        12 to CardSymbol.CIRCULO,    // Argentina
+        16 to CardSymbol.CIRCULO,    // Moscou
+        28 to CardSymbol.CIRCULO,    // Omã
+        29 to CardSymbol.CIRCULO,    // Sibéria
+        31 to CardSymbol.CIRCULO,    // Tchita
 
-        32 to CardSymbol.TRIANGULO,  // Vladivostok (sem carta)
-        33 to CardSymbol.TRIANGULO,  // Mongólia (sem carta)
-        34 to CardSymbol.TRIANGULO,  // Japão (sem carta)
-        35 to CardSymbol.TRIANGULO,  // China (sem carta)
+        32 to CardSymbol.TRIANGULO,  // Vladivostok
+        33 to CardSymbol.TRIANGULO,  // Mongólia
+        34 to CardSymbol.TRIANGULO,  // Japão
+        35 to CardSymbol.TRIANGULO,  // China
 
-        36 to CardSymbol.QUADRADO,   // Índia (sem carta)
-        37 to CardSymbol.QUADRADO,   // Vietnã (sem carta)
-        38 to CardSymbol.QUADRADO,   // Sumatra (sem carta)
-        39 to CardSymbol.QUADRADO    // Bornéu (sem carta)
+        36 to CardSymbol.QUADRADO,   // Índia
+        37 to CardSymbol.QUADRADO,   // Vietnã
+        38 to CardSymbol.QUADRADO,   // Sumatra
+        39 to CardSymbol.QUADRADO    // Bornéu
     )
 
+    private val all: Map<Int, CardSymbol> = printed + printedLate
+
     /** Existe símbolo impresso na arte desse território? */
-    fun isPrinted(territoryId: Int): Boolean = territoryId in printed
+    fun isPrinted(territoryId: Int): Boolean = territoryId in all
 
     /** Símbolo da carta desse território. */
     fun of(territoryId: Int): CardSymbol =
-        printed[territoryId] ?: filler[territoryId] ?: CardSymbol.CIRCULO
+        all[territoryId] ?: CardSymbol.CIRCULO
 
     /** Quantas cartas de cada símbolo o baralho tem (deve ser 14, 14 e 14). */
     fun distribution(territoryCount: Int): Map<CardSymbol, Int> =
