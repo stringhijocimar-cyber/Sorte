@@ -1,5 +1,9 @@
 name: Build APK
 
+# Gera um APK instalável por sideload. O build de release do template Expo já vem
+# assinado com a keystore de debug, então não há chave a configurar — mas por isso
+# mesmo este APK não serve para a Play Store.
+
 on:
   push:
     branches:
@@ -12,7 +16,7 @@ permissions:
 
 jobs:
   build:
-    name: Compilar APK de debug
+    name: Compilar APK
     runs-on: ubuntu-latest
 
     steps:
@@ -45,11 +49,19 @@ jobs:
       - name: Gerar projeto Android (prebuild)
         run: npx expo prebuild --platform android --no-install --clean
 
-      - name: Compilar (assembleDebug)
+      # Release em vez de debug: o APK de debug passava de 200 MB (quatro
+      # arquiteturas, sem minificação, bundle de desenvolvimento) — grande demais
+      # para instalar no celular. Duas arquiteturas cobrem os aparelhos atuais.
+      - name: Compilar (assembleRelease)
         run: |
           set -o pipefail
           chmod +x android/gradlew
-          cd android && ./gradlew assembleDebug --console=plain --no-daemon 2>&1 | tee ../build.log
+          cd android && ./gradlew assembleRelease \
+            -PreactNativeArchitectures=arm64-v8a,armeabi-v7a \
+            --console=plain --no-daemon 2>&1 | tee ../build.log
+
+      - name: Tamanho do APK
+        run: ls -lh android/app/build/outputs/apk/release/app-release.apk
 
       - name: Erros de compilação (resumo)
         if: failure()
@@ -62,25 +74,29 @@ jobs:
       - name: Publicar APK como artefato
         uses: actions/upload-artifact@v4
         with:
-          name: speakflow-debug-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: speakflow-apk
+          path: android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
 
       - name: Publicar release para download fácil
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: speakflow-debug-latest
-          name: SpeakFlow AI — APK de debug (mais recente)
+          tag_name: speakflow-latest
+          name: SpeakFlow AI — APK (mais recente)
           body: |
-            APK de debug do **SpeakFlow AI**, gerado automaticamente a partir de
+            APK do **SpeakFlow AI**, gerado automaticamente a partir de
             `${{ github.ref_name }}` (commit `${{ github.sha }}`).
 
-            **Instalar no Android:** baixe `app-debug.apk`, permita "instalar de
-            fontes desconhecidas" e abra o arquivo no celular.
+            **Instalar no Android:** baixe `app-release.apk`, permita "instalar de
+            fontes desconhecidas" e abra o arquivo no celular. Cobre aparelhos
+            arm64-v8a e armeabi-v7a.
+
+            Assinado com a keystore de debug do template: serve para instalar
+            direto no aparelho, não para publicar na Play Store.
 
             **Primeiro uso:** o app abre com o tutor simulado — todo o fluxo
             funciona, mas as respostas são fixas. Para conversar com a IA de
             verdade, suba o proxy (`server/README.md`) e informe o endereço dele
             em **Ajustes → Tutor por IA**. Nenhuma chave de IA fica no aplicativo.
-          files: android/app/build/outputs/apk/debug/app-debug.apk
+          files: android/app/build/outputs/apk/release/app-release.apk
           make_latest: true
