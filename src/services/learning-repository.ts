@@ -20,6 +20,19 @@ export interface LearningRepository {
   clear(): Promise<void>;
 }
 
+/**
+ * Gravação é best-effort: em navegadores com armazenamento bloqueado (janela
+ * privada, iframe restrito) o AsyncStorage lança. Perder a persistência é ruim,
+ * mas travar a navegação do aluno é pior — o erro é registrado e o fluxo segue.
+ */
+async function writeJson(key: string, value: unknown): Promise<void> {
+  try {
+    await AsyncStorage.setItem(key, JSON.stringify(value));
+  } catch (error) {
+    console.warn(`[speakflow] não foi possível salvar "${key}":`, error);
+  }
+}
+
 async function readJson<T>(key: string): Promise<T | null> {
   try {
     const raw = await AsyncStorage.getItem(key);
@@ -49,31 +62,33 @@ class AsyncStorageLearningRepository implements LearningRepository {
   }
 
   async saveProfile(profile: LearnerProfile): Promise<void> {
-    await AsyncStorage.setItem(KEYS.profile, JSON.stringify(profile));
+    await writeJson(KEYS.profile, profile);
   }
 
   async saveDiagnosticLevel(level: CefrLevel): Promise<void> {
-    await AsyncStorage.setItem(KEYS.diagnostic, JSON.stringify(level));
+    await writeJson(KEYS.diagnostic, level);
   }
 
   async appendSession(session: PracticeSession): Promise<PracticeSession[]> {
     const current = (await readJson<PracticeSession[]>(KEYS.sessions)) ?? [];
     const next = [session, ...current].slice(0, MAX_SESSIONS);
-    await AsyncStorage.setItem(KEYS.sessions, JSON.stringify(next));
+    await writeJson(KEYS.sessions, next);
     return next;
   }
 
   async saveAiBaseUrl(baseUrl: string | null): Promise<void> {
     if (baseUrl === null) {
-      await AsyncStorage.removeItem(KEYS.aiBaseUrl);
+      await AsyncStorage.removeItem(KEYS.aiBaseUrl).catch(() => undefined);
       return;
     }
-    await AsyncStorage.setItem(KEYS.aiBaseUrl, JSON.stringify(baseUrl));
+    await writeJson(KEYS.aiBaseUrl, baseUrl);
   }
 
   async clear(): Promise<void> {
     // A URL do proxy é configuração do aparelho, não progresso: sobrevive ao reset.
-    await AsyncStorage.removeMany([KEYS.profile, KEYS.diagnostic, KEYS.sessions]);
+    await AsyncStorage.removeMany([KEYS.profile, KEYS.diagnostic, KEYS.sessions]).catch(
+      (error) => console.warn('[speakflow] não foi possível apagar o progresso:', error)
+    );
   }
 }
 
