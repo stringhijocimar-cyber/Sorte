@@ -31,15 +31,21 @@ function estimate(score: number): CefrLevel {
 }
 
 export default function DiagnosticScreen() {
-  const { setDiagnosticLevel, profile, setProfile } = useLearning();
+  const { setDiagnosticLevel } = useLearning();
   const [answers, setAnswers] = useState<Record<number, number>>({});
+  const [saving, setSaving] = useState(false);
 
-  function complete() {
+  async function complete() {
+    if (saving) return;
+    setSaving(true);
     const score = questions.reduce((total, question, index) => total + (answers[index] === question.answer ? 1 : 0), 0);
-    const level = estimate(score);
-    setDiagnosticLevel(level);
-    if (profile) setProfile({ ...profile, currentLevel: level });
-    router.replace('/home');
+    try {
+      // O contexto grava o nível e sincroniza o perfil persistido.
+      await setDiagnosticLevel(estimate(score));
+      router.replace('/home');
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -57,7 +63,11 @@ export default function DiagnosticScreen() {
             </View>
           </Card>
         ))}
-        <PrimaryButton title="Ver meu nível" onPress={complete} disabled={Object.keys(answers).length !== questions.length} />
+        <PrimaryButton
+          title={saving ? 'Salvando…' : 'Ver meu nível'}
+          onPress={complete}
+          disabled={saving || Object.keys(answers).length !== questions.length}
+        />
       </Screen>
     </ScrollView>
   );

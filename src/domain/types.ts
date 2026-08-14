@@ -77,3 +77,23 @@ export interface SessionFeedback {
   fluencyNote: string;
   nextPractice: string;
 }
+
+/** Registro completo de uma prática concluída, persistido no dispositivo. */
+export interface PracticeSession {
+  id: string;
+  scenarioId: string;
+  scenarioTitle: string;
+  level: CefrLevel;
+  startedAt: string;
+  endedAt: string;
+  learnerTurns: number;
+  /** Erros capturados durante a conversa, sem interromper o fluxo. */
+  corrections: Correction[];
+  feedback: SessionFeedback;
+}
+
+export interface PersistedLearningState {
+  profile: LearnerProfile | null;
+  diagnosticLevel: CefrLevel | null;
+  sessions: PracticeSession[];
+}

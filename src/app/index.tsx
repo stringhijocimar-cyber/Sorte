@@ -1,10 +1,27 @@
-import { router } from 'expo-router';
+import { Redirect, router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { View } from 'react-native';
-import { PrimaryButton, Screen, textStyles } from '@/components/ui';
-import { Text } from 'react-native';
+import { Text, View } from 'react-native';
+import { Loading, PrimaryButton, Screen, textStyles } from '@/components/ui';
+import { useLearning } from '@/state/learning-context';
 
 export default function WelcomeScreen() {
+  const { ready, profile, diagnosticLevel } = useLearning();
+
+  if (!ready) {
+    return (
+      <SafeAreaView style={{ flex: 1 }}>
+        <Screen>
+          <Loading label="Carregando seu progresso…" />
+        </Screen>
+      </SafeAreaView>
+    );
+  }
+
+  // Quem já concluiu onboarding e diagnóstico volta direto para a rotina.
+  if (profile && diagnosticLevel) {
+    return <Redirect href="/home" />;
+  }
+
   return (
     <SafeAreaView style={{ flex: 1 }}>
       <Screen>

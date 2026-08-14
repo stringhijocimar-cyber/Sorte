@@ -21,6 +21,7 @@ export default function RootLayout() {
         <Stack.Screen name="home" options={{ title: 'SpeakFlow AI', headerBackVisible: false }} />
         <Stack.Screen name="session" options={{ title: 'Prática ao vivo' }} />
         <Stack.Screen name="feedback" options={{ title: 'Feedback' }} />
+        <Stack.Screen name="progress" options={{ title: 'Progresso' }} />
       </Stack>
     </LearningProvider>
   );

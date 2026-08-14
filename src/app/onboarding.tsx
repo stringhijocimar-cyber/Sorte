@@ -12,16 +12,24 @@ export default function OnboardingScreen() {
   const [dailyMinutes, setDailyMinutes] = useState<5 | 10 | 20 | 40>(20);
   const [accent, setAccent] = useState<AccentPreference>('american');
 
-  function finish() {
-    setProfile({
-      name: name.trim() || 'Learner',
-      goal,
-      dailyMinutes,
-      accent,
-      currentLevel: 'A1',
-      targetLevel: 'B2',
-    });
-    router.push('/diagnostic');
+  const [saving, setSaving] = useState(false);
+
+  async function finish() {
+    if (saving) return;
+    setSaving(true);
+    try {
+      await setProfile({
+        name: name.trim() || 'Learner',
+        goal,
+        dailyMinutes,
+        accent,
+        currentLevel: 'A1',
+        targetLevel: 'B2',
+      });
+      router.push('/diagnostic');
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -65,7 +73,7 @@ export default function OnboardingScreen() {
           <Choice title="Misto / internacional" selected={accent === 'mixed'} onPress={() => setAccent('mixed')} />
         </View>
 
-        <PrimaryButton title="Fazer diagnóstico" onPress={finish} />
+        <PrimaryButton title={saving ? 'Salvando…' : 'Fazer diagnóstico'} onPress={finish} disabled={saving} />
       </Screen>
     </ScrollView>
   );
