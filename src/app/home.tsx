@@ -3,6 +3,7 @@ import { ScrollView, Text, View } from 'react-native';
 import {
   Card,
   Loading,
+  Notice,
   palette,
   PrimaryButton,
   Screen,
@@ -11,7 +12,6 @@ import {
   textStyles,
 } from '@/components/ui';
 import { scenarios } from '@/data/scenarios';
-import { isUsingRealAi } from '@/services/conversation';
 import { useLearning } from '@/state/learning-context';
 
 function formatDate(iso: string) {
@@ -20,7 +20,7 @@ function formatDate(iso: string) {
 }
 
 export default function HomeScreen() {
-  const { ready, profile, level, sessions } = useLearning();
+  const { ready, profile, level, sessions, aiBaseUrl } = useLearning();
 
   if (!ready) {
     return (
@@ -46,7 +46,7 @@ export default function HomeScreen() {
           <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap', marginTop: 6 }}>
             <Tag label={`${sessions.length} sessão(ões)`} />
             <Tag label={`${totalTurns} turno(s) de fala`} />
-            <Tag label={isUsingRealAi ? 'Tutor por IA' : 'Tutor simulado'} />
+            <Tag label={aiBaseUrl ? 'Tutor por IA' : 'Tutor simulado'} />
           </View>
         </View>
 
@@ -61,7 +61,18 @@ export default function HomeScreen() {
           />
         </Card>
 
-        <SecondaryButton title="Ver meu progresso" onPress={() => router.push('/progress')} />
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <View style={{ flex: 1 }}>
+            <SecondaryButton title="Meu progresso" onPress={() => router.push('/progress')} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <SecondaryButton title="Ajustes" onPress={() => router.push('/settings')} />
+          </View>
+        </View>
+
+        {!aiBaseUrl ? (
+          <Notice message="Tutor simulado ativo: as respostas são fixas e não há correções. Configure seu servidor em Ajustes para conversar com a IA." />
+        ) : null}
 
         {recentSessions.length > 0 ? (
           <View style={{ gap: 10 }}>

@@ -96,4 +96,6 @@ export interface PersistedLearningState {
   profile: LearnerProfile | null;
   diagnosticLevel: CefrLevel | null;
   sessions: PracticeSession[];
+  /** Proxy de conversação escolhido pelo usuário. `null` = tutor simulado. */
+  aiBaseUrl: string | null;
 }

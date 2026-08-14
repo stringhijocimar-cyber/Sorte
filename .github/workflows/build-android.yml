@@ -1,0 +1,86 @@
+name: Build APK
+
+on:
+  push:
+    branches:
+      - main
+      - "claude/**"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Compilar APK de debug
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configurar Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Verificar tipos
+        run: npm run typecheck
+
+      - name: Configurar JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Configurar Android SDK
+        uses: android-actions/setup-android@v3
+
+      # O projeto é Expo: a pasta android/ é gerada a partir de app.json e não
+      # é versionada, para não haver duas fontes de verdade da configuração.
+      - name: Gerar projeto Android (prebuild)
+        run: npx expo prebuild --platform android --no-install --clean
+
+      - name: Compilar (assembleDebug)
+        run: |
+          set -o pipefail
+          chmod +x android/gradlew
+          cd android && ./gradlew assembleDebug --console=plain --no-daemon 2>&1 | tee ../build.log
+
+      - name: Erros de compilação (resumo)
+        if: failure()
+        run: |
+          echo "=============== ERROS DE COMPILAÇÃO ==============="
+          grep -E "^(e:|FAILURE|\* What went wrong|Caused by)" build.log | head -60 \
+            || echo "(nenhuma linha de erro reconhecida; veja o log completo acima)"
+          echo "=============== FIM DO RESUMO ==============="
+
+      - name: Publicar APK como artefato
+        uses: actions/upload-artifact@v4
+        with:
+          name: speakflow-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+
+      - name: Publicar release para download fácil
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: speakflow-debug-latest
+          name: SpeakFlow AI — APK de debug (mais recente)
+          body: |
+            APK de debug do **SpeakFlow AI**, gerado automaticamente a partir de
+            `${{ github.ref_name }}` (commit `${{ github.sha }}`).
+
+            **Instalar no Android:** baixe `app-debug.apk`, permita "instalar de
+            fontes desconhecidas" e abra o arquivo no celular.
+
+            **Primeiro uso:** o app abre com o tutor simulado — todo o fluxo
+            funciona, mas as respostas são fixas. Para conversar com a IA de
+            verdade, suba o proxy (`server/README.md`) e informe o endereço dele
+            em **Ajustes → Tutor por IA**. Nenhuma chave de IA fica no aplicativo.
+          files: android/app/build/outputs/apk/debug/app-debug.apk
+          make_latest: true

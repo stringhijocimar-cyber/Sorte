@@ -8,6 +8,7 @@ import {
   SkillProgress,
 } from '@/domain/types';
 import { learningRepository } from '@/services/learning-repository';
+import { configureConversationService } from '@/services/conversation';
 
 interface LearningState {
   /** `false` enquanto o estado persistido ainda está sendo carregado. */
@@ -16,12 +17,15 @@ interface LearningState {
   diagnosticLevel: CefrLevel | null;
   sessions: PracticeSession[];
   lastFeedback: SessionFeedback | null;
+  /** Proxy de conversação ativo. `null` = tutor simulado. */
+  aiBaseUrl: string | null;
   /** Nível efetivo: diagnóstico mais recente, senão o perfil, senão A1. */
   level: CefrLevel;
   skills: SkillProgress[];
   setProfile: (profile: LearnerProfile) => Promise<void>;
   setDiagnosticLevel: (level: CefrLevel) => Promise<void>;
   recordSession: (session: PracticeSession) => Promise<void>;
+  setAiBaseUrl: (baseUrl: string | null) => Promise<void>;
   resetProgress: () => Promise<void>;
 }
 
@@ -33,6 +37,7 @@ export function LearningProvider({ children }: { children: React.ReactNode }) {
   const [diagnosticLevel, setDiagnosticLevelState] = useState<CefrLevel | null>(null);
   const [sessions, setSessions] = useState<PracticeSession[]>([]);
   const [lastFeedback, setLastFeedback] = useState<SessionFeedback | null>(null);
+  const [aiBaseUrl, setAiBaseUrlState] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -43,6 +48,11 @@ export function LearningProvider({ children }: { children: React.ReactNode }) {
         setProfileState(state.profile);
         setDiagnosticLevelState(state.diagnosticLevel);
         setSessions(state.sessions);
+        if (state.aiBaseUrl) {
+          // Aplica o proxy salvo antes de qualquer tela poder iniciar uma conversa.
+          configureConversationService(state.aiBaseUrl);
+          setAiBaseUrlState(state.aiBaseUrl);
+        }
       })
       .finally(() => {
         if (active) setReady(true);
@@ -75,6 +85,12 @@ export function LearningProvider({ children }: { children: React.ReactNode }) {
     setSessions(stored);
   }, []);
 
+  const setAiBaseUrl = useCallback(async (baseUrl: string | null) => {
+    configureConversationService(baseUrl);
+    setAiBaseUrlState(baseUrl);
+    await learningRepository.saveAiBaseUrl(baseUrl);
+  }, []);
+
   const resetProgress = useCallback(async () => {
     await learningRepository.clear();
     setProfileState(null);
@@ -93,11 +109,13 @@ export function LearningProvider({ children }: { children: React.ReactNode }) {
       diagnosticLevel,
       sessions,
       lastFeedback,
+      aiBaseUrl,
       level,
       skills,
       setProfile,
       setDiagnosticLevel,
       recordSession,
+      setAiBaseUrl,
       resetProgress,
     }),
     [
@@ -106,11 +124,13 @@ export function LearningProvider({ children }: { children: React.ReactNode }) {
       diagnosticLevel,
       sessions,
       lastFeedback,
+      aiBaseUrl,
       level,
       skills,
       setProfile,
       setDiagnosticLevel,
       recordSession,
+      setAiBaseUrl,
       resetProgress,
     ]
   );

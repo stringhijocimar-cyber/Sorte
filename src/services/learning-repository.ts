@@ -5,6 +5,7 @@ const KEYS = {
   profile: 'speakflow:profile',
   diagnostic: 'speakflow:diagnostic-level',
   sessions: 'speakflow:sessions',
+  aiBaseUrl: 'speakflow:ai-base-url',
 } as const;
 
 /** Limite de sessões mantidas no dispositivo até existir sincronização remota. */
@@ -15,6 +16,7 @@ export interface LearningRepository {
   saveProfile(profile: LearnerProfile): Promise<void>;
   saveDiagnosticLevel(level: CefrLevel): Promise<void>;
   appendSession(session: PracticeSession): Promise<PracticeSession[]>;
+  saveAiBaseUrl(baseUrl: string | null): Promise<void>;
   clear(): Promise<void>;
 }
 
@@ -31,16 +33,18 @@ async function readJson<T>(key: string): Promise<T | null> {
 
 class AsyncStorageLearningRepository implements LearningRepository {
   async load(): Promise<PersistedLearningState> {
-    const [profile, diagnosticLevel, sessions] = await Promise.all([
+    const [profile, diagnosticLevel, sessions, aiBaseUrl] = await Promise.all([
       readJson<LearnerProfile>(KEYS.profile),
       readJson<CefrLevel>(KEYS.diagnostic),
       readJson<PracticeSession[]>(KEYS.sessions),
+      readJson<string>(KEYS.aiBaseUrl),
     ]);
 
     return {
       profile,
       diagnosticLevel,
       sessions: Array.isArray(sessions) ? sessions : [],
+      aiBaseUrl: typeof aiBaseUrl === 'string' ? aiBaseUrl : null,
     };
   }
 
@@ -59,7 +63,16 @@ class AsyncStorageLearningRepository implements LearningRepository {
     return next;
   }
 
+  async saveAiBaseUrl(baseUrl: string | null): Promise<void> {
+    if (baseUrl === null) {
+      await AsyncStorage.removeItem(KEYS.aiBaseUrl);
+      return;
+    }
+    await AsyncStorage.setItem(KEYS.aiBaseUrl, JSON.stringify(baseUrl));
+  }
+
   async clear(): Promise<void> {
+    // A URL do proxy é configuração do aparelho, não progresso: sobrevive ao reset.
     await AsyncStorage.removeMany([KEYS.profile, KEYS.diagnostic, KEYS.sessions]);
   }
 }

@@ -22,6 +22,7 @@ export default function RootLayout() {
         <Stack.Screen name="session" options={{ title: 'Prática ao vivo' }} />
         <Stack.Screen name="feedback" options={{ title: 'Feedback' }} />
         <Stack.Screen name="progress" options={{ title: 'Progresso' }} />
+        <Stack.Screen name="settings" options={{ title: 'Ajustes' }} />
       </Stack>
     </LearningProvider>
   );

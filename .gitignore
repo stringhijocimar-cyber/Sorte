@@ -1,4 +1,5 @@
 node_modules/
+server/node_modules/
 .expo/
 dist/
 web-build/
@@ -7,4 +8,9 @@ web-build/
 .env.*
 !.env.example
 .DS_Store
-server/node_modules/
+
+# Projetos nativos são gerados por `expo prebuild` a partir de app.json.
+# Versioná-los criaria uma segunda fonte de verdade da configuração.
+/android/
+/ios/
+build.log

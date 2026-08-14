@@ -1,17 +1,22 @@
 /**
  * Configuração de ambiente do cliente.
  *
- * O app nunca guarda chave de IA. Ele fala apenas com o proxy definido em
- * `EXPO_PUBLIC_AI_BASE_URL` (ver `server/`), que é quem detém a credencial.
- * Sem essa variável, o app roda com o serviço de conversação simulado.
+ * O app nunca guarda chave de IA. Ele fala apenas com o proxy (ver `server/`),
+ * que é quem detém a credencial.
+ *
+ * `EXPO_PUBLIC_AI_BASE_URL` define apenas o valor *padrão*, fixado no momento do
+ * build. O usuário pode apontar o app para o próprio proxy em Ajustes, sem
+ * recompilar — é isso que torna um APK distribuível utilizável.
  */
-const rawBaseUrl = process.env.EXPO_PUBLIC_AI_BASE_URL?.trim();
+export function normalizeBaseUrl(value: string | null | undefined): string | null {
+  const trimmed = value?.trim();
+  if (!trimmed) return null;
+  return trimmed.replace(/\/+$/, '');
+}
 
 export const aiConfig = {
-  /** URL do proxy de conversação, sem barra final. `null` = modo simulado. */
-  baseUrl: rawBaseUrl ? rawBaseUrl.replace(/\/+$/, '') : null,
+  /** Padrão de build. `null` = tutor simulado até o usuário configurar. */
+  defaultBaseUrl: normalizeBaseUrl(process.env.EXPO_PUBLIC_AI_BASE_URL),
   /** Tempo máximo por requisição de conversação, em milissegundos. */
   timeoutMs: Number(process.env.EXPO_PUBLIC_AI_TIMEOUT_MS ?? 30000),
 } as const;
-
-export const isRemoteAiEnabled = aiConfig.baseUrl !== null;
