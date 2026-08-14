@@ -1,0 +1,20 @@
+{
+  "expo": {
+    "name": "SpeakFlow AI",
+    "slug": "speakflow-ai",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "speakflow",
+    "userInterfaceStyle": "automatic",
+    "plugins": ["expo-router"],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "android": {
+      "package": "com.speakflow.ai"
+    },
+    "ios": {
+      "bundleIdentifier": "com.speakflow.ai"
+    }
+  }
+}
